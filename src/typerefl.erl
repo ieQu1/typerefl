@@ -37,7 +37,7 @@
              , name = ??Name "()"
              }).
 
--type type() :: #type{} | atom().
+-type type() :: #type{} | atom() | tuple() | [type(), ...].
 
 %%====================================================================
 %% API functions
@@ -45,22 +45,20 @@
 
 -spec typecheck(type() | tuple() | [type(), ...], term()) ->
                    ok | {error, string()}.
-typecheck(Type0, Term) ->
-  Type = desugar(Type0),
+typecheck(Type, Term) ->
   case check(Type, Term) of
     true ->
       ok;
     {false, Stack0} ->
       %% TODO: do something with stack
-      Result = io_lib:format( "Type error in ~p"
+      Result = io_lib:format( "Expected: ~s~nGot: ~p~n"
                             , [name(Type), Term]
                             ),
       {error, lists:flatten(Result)}
   end.
 
 -spec print(type() | tuple() | [type(), ...]) -> iolist().
-print(Type0) ->
-  Type = desugar(Type0),
+print(Type) ->
   case defn(Type) of
     [] ->
       name(Type);
@@ -189,7 +187,9 @@ nonempty_list(A) ->
 name(A) when is_atom(A) ->
   atom_to_list(A);
 name(#type{name = Name}) ->
-  Name.
+  Name;
+name(T) ->
+  name(desugar(T)).
 
 %% @private Get type definition (relevant for user-defined types)
 -spec defn(type()) -> iolist().
@@ -210,7 +210,9 @@ check(Type = #type{check = Check}, Term) ->
     true           -> true;
     {false, Stack} -> {false, [name(Type) | Stack]};
     false          -> {false, [{name(Type), Term}]}
-  end.
+  end;
+check(Type, Term) ->
+  check(desugar(Type), Term).
 
 %% @private CPS version of `check/2' function
 -spec check(type()) -> ccont().
@@ -272,11 +274,7 @@ or_else(A, B) ->
   end.
 
 %% @private Transforms tuples to `tuple/1' calls and so on.
--spec desugar(type() | tuple() | [type(), ...]) -> type().
-desugar(T) when is_atom(T) ->
-  T;
-desugar(T = #type{}) ->
-  T;
+-spec desugar(tuple() | [type(), ...]) -> type().
 desugar(T) when is_tuple(T) ->
   tuple(tuple_to_list(T));
 desugar([T]) ->
