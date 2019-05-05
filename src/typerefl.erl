@@ -1,13 +1,26 @@
 -module(typerefl).
 
+-include("typerefl_int.hrl").
+
 %% API
 -export([typecheck/2, print/1]).
 
-%% Type reflections
+%% Type reflections (Copy verbatim to types.hrl)
 -export([ any/0, atom/0, binary/0, boolean/0, float/0, function/0
         , integer/0, list/0, list/1, map/0, nonempty_list/1, number/0
-        , pid/0, port/0, reference/0, term/0, tuple/0, tuple/1, union/2
+        , pid/0, port/0, reference/0, term/0, tuple/0, byte/0
+        , char/0, arity/0, module/0, non_neg_integer/0
+        , string/0, nil/0, map/1, maybe_improper_list/0
+        , maybe_improper_list/2, nonempty_maybe_improper_list/0
+        , nonempty_maybe_improper_list/2, nonempty_string/0
+        , iolist/0, iodata/0
         ]).
+
+%% Internal
+-export([fix_t/4, make_lazy/3]).
+
+%% Special types that should not be imported:
+-export([node/0, union/2, union/1, tuple/1, range/2]).
 
 -export_type([type/0, check_result/0, result/0, typename/0]).
 
@@ -15,7 +28,7 @@
 %% Types
 %%====================================================================
 
--type typename() :: iolist().
+-type typename() :: iodata().
 
 -type check_result() :: boolean()
                       | {false, [{typename(), term()} | typename()]}.
@@ -25,6 +38,10 @@
 
 -type ccont() :: fun((term()) -> check_result()).
 
+-type thunk(Val) :: fun(() -> Val).
+
+-define(is_thunk(A), is_function(A, 0)).
+
 -record(type,
         { check           :: fun((term()) -> check_result())
         , name            :: typename()
@@ -32,12 +49,31 @@
         , definition = [] :: [iolist()]
         }).
 
+-record(lazy_type,
+        { name            :: typename()
+        , thunk           :: thunk(type())
+        }).
+
 -define(prim(Name, Check),
         #type{ check = fun erlang:Check/1
              , name = ??Name "()"
              }).
 
--type type() :: #type{} | atom() | tuple() | [type(), ...].
+-define(alias(Name, Type),
+        (Type)#type{name = Name}).
+
+-opaque type_intern() :: #type{}
+                       | thunk(type()).
+
+-type type() :: type_intern()
+              | atom()
+              | tuple()
+              | [type(), ...]
+              | []
+              | #{type() => type()}.
+
+-type map_field_spec() :: {fuzzy, type(), type()}
+                        | {strict, term(), type()}.
 
 %%====================================================================
 %% API functions
@@ -109,7 +145,7 @@ integer() ->
 %% @doc Reflection of `list()' type
 -spec list() -> type().
 list() ->
-  ?prim(list, is_list).
+  list(term()).
 
 %% @doc Reflection of `map()' type
 -spec map() -> type().
@@ -153,8 +189,12 @@ tuple() ->
 union(A, B) ->
   #type{ check = or_else(check(A), check(B))
        , name = [name(A), " | ", name(B)]
-       , definition = defn(A) ++ defn(B)
+       %, definition = defn(A) ++ defn(B)
        }.
+
+-spec union([type(), ...]) -> type().
+union([H|Rest]) ->
+  lists:foldl(fun union/2, H, Rest).
 
 %% @doc Reflection of `{A, B, ...}' type
 -spec tuple([type()]) -> type().
@@ -167,16 +207,109 @@ tuple(Args) ->
 %% @doc Reflection of `[A]' type
 -spec list(type()) -> type().
 list(A) ->
-  #type{ check = validate_list(A, 0)
+  #type{ check = validate_list(A, nil(), true)
        , name = ["[", name(A), "]"]
        }.
 
 %% @doc Reflection of `[A,...]' type
 -spec nonempty_list(type()) -> type().
 nonempty_list(A) ->
-  #type{ check = validate_list(A, 1)
+  #type{ check = validate_list(A, nil(), false)
        , name = ["[", name(A), ",...]"]
        }.
+
+-spec maybe_improper_list(type(), type()) -> type().
+maybe_improper_list(A, B) ->
+  #type{ check = validate_list(A, B, true)
+       , name = io_lib:format("maybe_improper_list(~s, ~s)", [name(A), name(B)])
+       }.
+
+-spec maybe_improper_list() -> type().
+maybe_improper_list() ->
+  maybe_improper_list(term(), term()).
+
+-spec nonempty_maybe_improper_list(type(), type()) -> type().
+nonempty_maybe_improper_list(A, B) ->
+  #type{ check = validate_list(A, B, false)
+       , name = io_lib:format("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
+       }.
+
+-spec nonempty_maybe_improper_list() -> type().
+nonempty_maybe_improper_list() ->
+  nonempty_maybe_improper_list(term(), term()).
+
+-spec range(integer() | '-inf', integer() | inf) -> type().
+range(Min, Max) ->
+  #type{ check = fun(I) when is_integer(I) ->
+                     I =< Max andalso (Min =:= '-inf' orelse I >= Min);
+                    (_) ->
+                     false
+                 end
+       , name = io_lib:format("~p..~p", [Min, Max])
+       }.
+
+-spec char() -> type().
+char() ->
+  ?alias("char()", range(0, 16#10ffff)).
+
+-spec arity() -> type().
+arity() ->
+  ?alias("arity()", range(0, 255)).
+
+-spec byte() -> type().
+byte() ->
+  range(0, 255).
+
+-spec module() -> type().
+module() ->
+  ?prim(module, is_atom).
+
+-spec non_neg_integer() -> type().
+non_neg_integer() ->
+  ?alias("non_neg_integer()", range(0, inf)).
+
+-spec node() -> type().
+node() ->
+  ?prim(node, is_atom).
+
+-spec string() -> type().
+string() ->
+  ?alias("string()", list(char())).
+
+-spec nonempty_string() -> type().
+nonempty_string() ->
+  ?alias("nonempty_string()", nonempty_list(char())).
+
+-spec nil() -> type().
+nil() ->
+  #type{ check = fun(T) -> T =:= [] end
+       , name = "[]"
+       }.
+
+-spec map([map_field_spec()]) -> type().
+map(FieldSpecs) ->
+  Fuzzy = [{K, V} || {fuzzy, K, V} <- FieldSpecs],
+  Strict = [{K, V} || {strict, K, V} <- FieldSpecs],
+  StrictFieldNames = [io_lib:format("~p := ~s", [K, name(V)]) || {K, V} <- Strict],
+  FuzzyFieldNames = [io_lib:format("~s => ~s", [name(K), name(V)]) || {K, V} <- Fuzzy],
+  #type{ check = fun(Term) ->
+                      validate_map(Fuzzy, Strict, Term)
+                  end
+       , name = ["#{", intercalate(StrictFieldNames ++ FuzzyFieldNames, ", "), "}"]
+       }.
+
+-spec iolist() -> type().
+iolist() ->
+  Self = #lazy_type{ name = "iolist()"
+                   , thunk = fun iolist/0
+                   },
+  Elem = union([byte(), binary(), Self]),
+  Tail = union(binary(), nil()),
+  ?alias("iolist()", maybe_improper_list(Elem, Tail)).
+
+-spec iodata() -> type().
+iodata() ->
+  union(iolist(), binary()).
 
 %%====================================================================
 %% Internal functions
@@ -188,6 +321,8 @@ name(A) when is_atom(A) ->
   atom_to_list(A);
 name(#type{name = Name}) ->
   Name;
+name(#lazy_type{name = Name}) ->
+  Name;
 name(T) ->
   name(desugar(T)).
 
@@ -195,8 +330,8 @@ name(T) ->
 -spec defn(type()) -> iolist().
 defn(#type{definition = Ret}) ->
   Ret;
-defn(_) ->
-  [].
+defn(Type) ->
+  defn(desugar(Type)).
 
 %% @private Run the continuation and extend the result if needed
 -spec check(type(), term()) -> result().
@@ -247,18 +382,68 @@ validate_tuple(Args) ->
       false
   end.
 
--spec validate_list(type(), integer()) -> ccont().
-validate_list(T, LMin) ->
-  fun(L) when is_list(L), length(L) >= LMin ->
+-spec validate_list(type(), type(), boolean()) -> ccont().
+validate_list(ElemT, TailT, CanBeEmpty) ->
+  Go = fun Go([H|T]) ->
+           check_(ElemT, H),
+           Go(T);
+          Go(T) ->
+           check_(TailT, T)
+       end,
+  fun(L) ->
       try
-        [check_(T, I) || I <- L],
-        true
+        is_list(L) orelse throw(badlist),
+        CanBeEmpty orelse L =/= [] orelse throw(badlist),
+        Go(L)
       catch
-        Err = {false, _Stack} -> Err
-      end;
-     (L) ->
-      false
+        Err = {false, _Stack} -> Err;
+        badlist -> false
+      end
   end.
+
+-spec validate_map( [{type(), type()}]
+                  , [{term(), type()}]
+                  , term()
+                  ) -> true | {false, _}.
+validate_map(Fuzzy, Strict, Term) ->
+    try
+        is_map(Term) orelse throw(badmap),
+        %% Validate strict fields:
+        [case Term of
+           #{Key := Val} ->
+             check_(ValT, Val);
+           _ ->
+             throw({missing_key, Key})
+         end
+         || {Key, ValT} <- Strict],
+        %% Validate fuzzy fields via ugly O(n * m) algorithm:
+        StrictKeys = [K || {K, _} <- Strict],
+        Term1 = maps:without(StrictKeys, Term),
+        [try
+           [case check(KeyT, Key) of
+              true ->
+                case check(ValT, Val) of
+                  true -> throw(success);
+                  _ -> nok
+                end;
+              _ ->
+                nok
+            end
+            || {KeyT, ValT} <- Fuzzy],
+           throw(badmap)
+         catch
+           success -> ok
+         end
+         || {Key, Val} <- maps:to_list(Term1)],
+        true
+    catch
+      Err = {false, _Stack} ->
+        Err;
+      {missing_key, _} ->
+        false; %% TODO: make better error stack
+      badmap ->
+        false
+    end.
 
 %% @private CPS version of orelse operator
 -spec or_else(F, F) -> F when F :: ccont().
@@ -273,12 +458,42 @@ or_else(A, B) ->
       end
   end.
 
-%% @private Transforms tuples to `tuple/1' calls and so on.
--spec desugar(tuple() | [type(), ...]) -> type().
+%% @private Transforms tuples to `tuple/1' calls and so on. Forces
+%% lazy evaluation.
+-spec desugar(tuple() | [type(), ...] | [] | #{type() => type()}) -> type().
+desugar(T = #type{}) ->
+  T;
+desugar(#lazy_type{thunk = Type}) ->
+  desugar(Type());
 desugar(T) when is_tuple(T) ->
   tuple(tuple_to_list(T));
 desugar([T]) ->
-  list(T).
+  list(T);
+desugar([]) ->
+  nil();
+desugar(T) when is_map(T) ->
+  map([{fuzzy, K, V} || {K, V} <- maps:to_list(T)]).
+
+%% @private Bastardized fixed-point combinator-ish function that we
+%% use to implement lazy recursion
+-spec fix_t(typename(), fun(), fun((#lazy_type{}) -> type()), [term()]) -> type().
+fix_t(Name, F, G, Args) ->
+  H = make_lazy(Name, F, Args),
+  G(H).
+
+%% @private
+-spec make_lazy(iolist(), fun(), [term()]) -> type().
+make_lazy(Name, Fun, Args) ->
+  #lazy_type{ name = Name
+            , thunk = fun() -> apply(Fun, Args) end
+            }.
+
+intercalate([], _) ->
+  [];
+intercalate([A], _) ->
+  [A];
+intercalate([A|T], S) ->
+  [A, S | intercalate(T, S)].
 
 %% @private CPS version of andalso operator
 %% -spec and_also(F, F) -> F when F :: ccont().
