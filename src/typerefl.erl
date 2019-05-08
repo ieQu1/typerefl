@@ -17,7 +17,7 @@
         ]).
 
 %% Internal
--export([fix_t/4, make_lazy/3]).
+-export([fix_t/4, make_lazy/3, alias/2]).
 
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
@@ -42,28 +42,18 @@
 
 -define(is_thunk(A), is_function(A, 0)).
 
--record(type,
-        { check           :: fun((term()) -> check_result())
-        , name            :: typename()
-        %% Additional data that should be printed for this type:
-        , definition = [] :: [iolist()]
-        }).
-
--record(lazy_type,
-        { name            :: typename()
-        , thunk           :: thunk(type())
-        }).
-
 -define(prim(Name, Check),
-        #type{ check = fun erlang:Check/1
-             , name = ??Name "()"
-             }).
+        {?type_refl, #{ check => fun erlang:Check/1
+                      , name => ??Name "()"
+                      }}).
 
--define(alias(Name, Type),
-        (Type)#type{name = Name}).
+-type prim_type() :: {?type_refl, #{ check := ccont()
+                                   , name := typename()
+                                   , definition => iolist()
+                                   }}.
 
--opaque type_intern() :: #type{}
-                       | thunk(type()).
+-type type_intern() :: prim_type()
+                     | thunk(type()).
 
 -type type() :: type_intern()
               | atom()
@@ -78,6 +68,10 @@
 %%====================================================================
 %% API functions
 %%====================================================================
+
+alias(Name, Type) ->
+  {?type_refl, Map} = Type,
+  {?type_refl, Map#{name => Name}}.
 
 -spec typecheck(type() | tuple() | [type(), ...], term()) ->
                    ok | {error, string()}.
@@ -175,9 +169,9 @@ reference() ->
 %% @doc Reflection of `term()' type
 -spec term() -> type().
 term() ->
-  #type{ check = fun(_) -> true end
-       , name = "term()"
-       }.
+  {?type_refl, #{ check => fun(_) -> true end
+                , name => "term()"
+                }}.
 
 %% @doc Reflection of `tuple()' type
 -spec tuple() -> type().
@@ -187,10 +181,10 @@ tuple() ->
 %% @doc Reflection of `A | B' type
 -spec union(type(), type()) -> type().
 union(A, B) ->
-  #type{ check = or_else(check(A), check(B))
-       , name = [name(A), " | ", name(B)]
-       %, definition = defn(A) ++ defn(B)
-       }.
+  {?type_refl, #{ check => or_else(check(A), check(B))
+                , name => [name(A), " | ", name(B)]
+                %, definition => defn(A) ++ defn(B) TODO
+                }}.
 
 -spec union([type(), ...]) -> type().
 union([H|Rest]) ->
@@ -199,30 +193,30 @@ union([H|Rest]) ->
 %% @doc Reflection of `{A, B, ...}' type
 -spec tuple([type()]) -> type().
 tuple(Args) ->
-  #type{ check = validate_tuple(Args)
-       , name = ["{", string:join([name(I) || I <- Args], ", "), "}"]
-       , definition = lists:append([defn(I) || I <- Args])
-       }.
+  {?type_refl, #{ check => validate_tuple(Args)
+                , name => ["{", string:join([name(I) || I <- Args], ", "), "}"]
+                , definition => lists:append([defn(I) || I <- Args])
+                }}.
 
 %% @doc Reflection of `[A]' type
 -spec list(type()) -> type().
 list(A) ->
-  #type{ check = validate_list(A, nil(), true)
-       , name = ["[", name(A), "]"]
-       }.
+  {?type_refl, #{ check => validate_list(A, nil(), true)
+                , name => ["[", name(A), "]"]
+                }}.
 
 %% @doc Reflection of `[A,...]' type
 -spec nonempty_list(type()) -> type().
 nonempty_list(A) ->
-  #type{ check = validate_list(A, nil(), false)
-       , name = ["[", name(A), ",...]"]
-       }.
+  {?type_refl, #{ check => validate_list(A, nil(), false)
+                , name => ["[", name(A), ",...]"]
+                }}.
 
 -spec maybe_improper_list(type(), type()) -> type().
 maybe_improper_list(A, B) ->
-  #type{ check = validate_list(A, B, true)
-       , name = io_lib:format("maybe_improper_list(~s, ~s)", [name(A), name(B)])
-       }.
+  {?type_refl, #{ check => validate_list(A, B, true)
+                , name => io_lib:format("maybe_improper_list(~s, ~s)", [name(A), name(B)])
+                }}.
 
 -spec maybe_improper_list() -> type().
 maybe_improper_list() ->
@@ -230,9 +224,9 @@ maybe_improper_list() ->
 
 -spec nonempty_maybe_improper_list(type(), type()) -> type().
 nonempty_maybe_improper_list(A, B) ->
-  #type{ check = validate_list(A, B, false)
-       , name = io_lib:format("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
-       }.
+  {?type_refl, #{ check => validate_list(A, B, false)
+                , name => io_lib:format("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
+                }}.
 
 -spec nonempty_maybe_improper_list() -> type().
 nonempty_maybe_improper_list() ->
@@ -240,21 +234,21 @@ nonempty_maybe_improper_list() ->
 
 -spec range(integer() | '-inf', integer() | inf) -> type().
 range(Min, Max) ->
-  #type{ check = fun(I) when is_integer(I) ->
-                     I =< Max andalso (Min =:= '-inf' orelse I >= Min);
-                    (_) ->
-                     false
-                 end
-       , name = io_lib:format("~p..~p", [Min, Max])
-       }.
+  {?type_refl, #{ check => fun(I) when is_integer(I) ->
+                               I =< Max andalso (Min =:= '-inf' orelse I >= Min);
+                              (_) ->
+                               false
+                           end
+                , name => io_lib:format("~p..~p", [Min, Max])
+                }}.
 
 -spec char() -> type().
 char() ->
-  ?alias("char()", range(0, 16#10ffff)).
+  alias("char()", range(0, 16#10ffff)).
 
 -spec arity() -> type().
 arity() ->
-  ?alias("arity()", range(0, 255)).
+  alias("arity()", range(0, 255)).
 
 -spec byte() -> type().
 byte() ->
@@ -266,7 +260,7 @@ module() ->
 
 -spec non_neg_integer() -> type().
 non_neg_integer() ->
-  ?alias("non_neg_integer()", range(0, inf)).
+  alias("non_neg_integer()", range(0, inf)).
 
 -spec node() -> type().
 node() ->
@@ -274,17 +268,17 @@ node() ->
 
 -spec string() -> type().
 string() ->
-  ?alias("string()", list(char())).
+  alias("string()", list(char())).
 
 -spec nonempty_string() -> type().
 nonempty_string() ->
-  ?alias("nonempty_string()", nonempty_list(char())).
+  alias("nonempty_string()", nonempty_list(char())).
 
 -spec nil() -> type().
 nil() ->
-  #type{ check = fun(T) -> T =:= [] end
-       , name = "[]"
-       }.
+  {?type_refl, #{ check => fun(T) -> T =:= [] end
+                , name => "[]"
+                }}.
 
 -spec map([map_field_spec()]) -> type().
 map(FieldSpecs) ->
@@ -292,20 +286,18 @@ map(FieldSpecs) ->
   Strict = [{K, V} || {strict, K, V} <- FieldSpecs],
   StrictFieldNames = [io_lib:format("~p := ~s", [K, name(V)]) || {K, V} <- Strict],
   FuzzyFieldNames = [io_lib:format("~s => ~s", [name(K), name(V)]) || {K, V} <- Fuzzy],
-  #type{ check = fun(Term) ->
-                      validate_map(Fuzzy, Strict, Term)
-                  end
-       , name = ["#{", intercalate(StrictFieldNames ++ FuzzyFieldNames, ", "), "}"]
-       }.
+  {?type_refl, #{ check => fun(Term) ->
+                              validate_map(Fuzzy, Strict, Term)
+                          end
+                , name => ["#{", intercalate(StrictFieldNames ++ FuzzyFieldNames, ", "), "}"]
+                }}.
 
 -spec iolist() -> type().
 iolist() ->
-  Self = #lazy_type{ name = "iolist()"
-                   , thunk = fun iolist/0
-                   },
+  Self = make_lazy("iolist()", fun iolist/0, []),
   Elem = union([byte(), binary(), Self]),
   Tail = union(binary(), nil()),
-  ?alias("iolist()", maybe_improper_list(Elem, Tail)).
+  alias("iolist()", maybe_improper_list(Elem, Tail)).
 
 -spec iodata() -> type().
 iodata() ->
@@ -319,7 +311,7 @@ iodata() ->
 -spec name(type()) -> iolist().
 name(A) when is_atom(A) ->
   atom_to_list(A);
-name(#type{name = Name}) ->
+name({?type_refl, #{name := Name}}) ->
   Name;
 name(#lazy_type{name = Name}) ->
   Name;
@@ -328,8 +320,12 @@ name(T) ->
 
 %% @private Get type definition (relevant for user-defined types)
 -spec defn(type()) -> iolist().
-defn(#type{definition = Ret}) ->
-  Ret;
+defn({?type_refl, Map}) ->
+  maps:get(definition, Map, []);
+defn(#lazy_type{name = Name}) ->
+  Name;
+defn(A) when is_atom(A) ->
+  [];
 defn(Type) ->
   defn(desugar(Type)).
 
@@ -340,7 +336,7 @@ check(Type, Term) when is_atom(Type) ->
     Type -> true;
     _    -> {false, [{Type, Term}]}
   end;
-check(Type = #type{check = Check}, Term) ->
+check(Type = {?type_refl, #{check := Check}}, Term) ->
   case Check(Term) of
     true           -> true;
     {false, Stack} -> {false, [name(Type) | Stack]};
@@ -461,7 +457,7 @@ or_else(A, B) ->
 %% @private Transforms tuples to `tuple/1' calls and so on. Forces
 %% lazy evaluation.
 -spec desugar(tuple() | [type(), ...] | [] | #{type() => type()}) -> type().
-desugar(T = #type{}) ->
+desugar(T = {?type_refl, _}) ->
   T;
 desugar(#lazy_type{thunk = Type}) ->
   desugar(Type());

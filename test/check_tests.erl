@@ -13,6 +13,13 @@
                     , typerefl:typecheck(Type, Term)
                     )).
 
+-type simple(A) :: A.
+
+%% Recursive type is fine too:
+-type stupid_list(OwO) :: {cons, OwO, stupid_list(OwO)} | nil.
+
+-reflect_type([simple/1, stupid_list/1]).
+
 concrete_atom_test() ->
   ?valid(true, true),
   ?valid(false, false),
@@ -108,64 +115,41 @@ binary_test() ->
   ?invalid(binary(), 1).
 
 map_test() ->
-    T = #{atom() => string()},
-    ?valid(T, #{}),
-    ?valid(T, #{foo => "bar"}),
-    ?invalid(T, #{ foo => "bar"
-                 , "bar" => foo
-                 , baz => "quux"
-                 }),
-    ?invalid(T, #{ foo => 1
-                 , bar => "bar"
-                 }).
+  T = #{atom() => string()},
+  ?valid(T, #{}),
+  ?valid(T, #{foo => "bar"}),
+  ?invalid(T, #{ foo => "bar"
+               , "bar" => foo
+               , baz => "quux"
+               }),
+  ?invalid(T, #{ foo => 1
+               , bar => "bar"
+               }).
 
 exact_map_test() ->
-    T = map([ {strict, foo, boolean()}
-            , {strict, bar, string()}
-            ]),
-    ?valid(T, #{foo => true, bar => "bar"}),
-    ?valid(T, #{foo => false, bar => []}),
-    ?invalid(T, #{foo => foo, bar => "bar"}),
-    ?invalid(T, #{foo => true}),
-    ?invalid(T, #{foo => true, bar => 1}).
+  T = map([ {strict, foo, boolean()}
+          , {strict, bar, string()}
+          ]),
+  ?valid(T, #{foo => true, bar => "bar"}),
+  ?valid(T, #{foo => false, bar => []}),
+  ?invalid(T, #{foo => foo, bar => "bar"}),
+  ?invalid(T, #{foo => true}),
+  ?invalid(T, #{foo => true, bar => 1}).
 
-%% typedef_test() ->
-%%     StupidList =
-%%         fun(A) ->
-%%                 #type{id = [stupid_list], parameters = [A]}
-%%         end,
-%%     Model0 = #{stupid_list =>
-%%                    {[typedef]
-%%                    , #{ type => union( tuple([{var, '$a'}, StupidList({var, '$a'})])
-%%                                      , nil
-%%                                      )
-%%                       , type_variables => ['$a']
-%%                       , typename => "stupid_list"
-%%                       }
-%%                    , #{}
-%%                    }
-%%               },
-%%     {ok, Model} = lee_model:compile([], [Model0, lee:base_model()]),
-%%     T = StupidList(union(integer(), foo)),
-%%     ?valid(T, nil),
-%%     ?valid(T, {1, nil}),
-%%     ?valid(T, {foo, {1, nil}}),
-%%     ?valid(T, {42, {foo, {1, nil}}}),
-%%     ?invalid(T, bar),
-%%     ?invalid(T, 1.1),
-%%     ?invalid(T, {1, foo}),
-%%     ?invalid(T, {foo, {42, {1.1, nil}}}).
-
-%% typedef_2_test() ->
-%%     Model0 = #{foo => {[typedef]
-%%                       , #{ type => {var, '1'}
-%%                          , type_variables => ['1']
-%%                          , typename => "foo"
-%%                          }
-%%                       , #{}
-%%                       }},
-%%     {ok, Model} = lee_model:compile([], [Model0, lee:base_model()]),
-%%     T = fun(A) -> #type{id = [foo], parameters = [A]} end,
-%%     ?valid(T(boolean()), true),
-%%     ?valid(T(boolean()), false),
-%%     ?invalid(T(boolean()), 1).
+higher_kind_test() ->
+  %% Simple:
+  ?valid(simple(atom()), foo),
+  ?valid(simple(atom()), bar),
+  ?invalid(simple(atom()), 1),
+  ?invalid(simple(atom()), <<>>),
+  %% StupidList:
+  T1 = stupid_list(atom()),
+  T2 = stupid_list(integer()),
+  ?valid(T1, nil),
+  ?valid(T2, nil),
+  ?valid(T1, {cons, foo, {cons, bar, nil}}),
+  ?valid(T2, {cons, 1, {cons, 2, {cons, 3, nil}}}),
+  ?invalid(T1, foo),
+  ?invalid(T1, {cons, foo, {cons, bar, foo}}),
+  ?invalid(T1, {cons, foo, {cons, 1, nil}}),
+  ok.

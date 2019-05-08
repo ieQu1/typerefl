@@ -12,6 +12,6 @@
         , iolist/0, iodata/0, union/2, union/1, tuple/1, range/2
         ]).
 
-%-compile({parse_transform, lee_transform}).
+-compile({parse_transform, typerefl_trans}).
 
 -endif.
