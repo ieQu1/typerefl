@@ -16,7 +16,9 @@
 -type simple(A) :: A.
 
 %% Recursive type is fine too:
--type stupid_list(OwO) :: {cons, OwO, stupid_list(OwO)} | nil.
+-type stupid_list(OwO, UwU) :: {cons, OwO, stupid_list(OwO, UwU)} | UwU.
+
+-type stupid_list(A) :: stupid_list(A, nil).
 
 -reflect_type([simple/1, stupid_list/1]).
 

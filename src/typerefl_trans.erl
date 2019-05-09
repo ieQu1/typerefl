@@ -3,6 +3,14 @@
 
 -include("typerefl_int.hrl").
 
+%-define(debug, true).
+
+-ifdef(debug).
+-define(log(A, B), io:format(user, A "~n", B)).
+-else.
+-define(log(A, B), ok).
+-endif.
+
 -export([parse_transform/2]).
 
 -type local_tref() :: {Name :: atom(), Arity :: arity()}.
@@ -100,7 +108,7 @@ parse_transform(Forms0, _Options) ->
   Typedefs0 = find_local_typedefs(Forms0),
   Typedefs = maps:without(Ignored, Typedefs0),
   TypesToReflect = types_to_reflect(Forms0),
-  %io:format(user, "Attributes: ~p", [#{types_to_reflect => TypesToReflect}]),
+  ?log("Types to reflect: ~p", [TypesToReflect]),
   Module = hd([M || {attribute, _, module, M} <- Forms0]),
   State0 = #s{ local_types = Typedefs
              , custom_verif = CustomVerif
@@ -109,16 +117,18 @@ parse_transform(Forms0, _Options) ->
              },
   %% Perform type reflection:
   State = lists:foldl(fun refl_type/2, State0, TypesToReflect),
-  ReflectedTypes = maps:to_list(State#s.reflected_types),
   %% export_type and export definitions are the same.
   Exports = TypesToReflect,
   Forms1 = add_attributes(Forms0, [ {export, Exports}
                                   , {export_type, Exports}
                                   ]),
+  ReifiedTypes = maps:map(fun(_, V) ->
+                              make_reflection_function(Module, V)
+                          end,
+                          State#s.reflected_types),
+  ?log("Reified types:~n~p", [ReifiedTypes]),
   %% Append type reflections to the module definition:
-  Forms = Forms1 ++ [make_reflection_function(Module, I) || {_, I} <- ReflectedTypes],
-  %io:format(user, "AST: ~p~n", [Forms]),
-  Forms.
+  Forms1 ++ [I || {_, I} <- maps:to_list(ReifiedTypes)].
 
 %% Reflect a local type
 -spec refl_type(local_tref(), #s{}) -> #s{}.
@@ -126,14 +136,16 @@ refl_type(TRef, State0) ->
   #s{ reflected_types = RTypes0
     , local_types = LocalTypes
     } = State0,
+  ?log("Reflecting type: ~p", [TRef]),
   %% Dirty hack to avoid infinite loops: prematurely mark current type
   %% as existent:
   State1 = State0#s{ reflected_types = RTypes0 #{TRef => in_progress}
                    },
   TypeDef = maps:get(TRef, LocalTypes),
   {ReflBody, State2} = do_refl_type(TRef, State1, TypeDef#typedef.body),
+  RTypes1 = State2#s.reflected_types,
   Reflection = TypeDef#typedef{body = ReflBody},
-  State2#s{reflected_types = RTypes0 #{TRef => Reflection}}.
+  State2#s{reflected_types = RTypes1 #{TRef => Reflection}}.
 
 %% Traverse AST of a type definition and produce a reflection
 -spec do_refl_type(local_tref(), #s{}, ast()) -> {ast(), #s{}}.
@@ -143,12 +155,35 @@ do_refl_type(_, State, AST = ?INT(_)) ->
     {AST, State};
 do_refl_type(_, State, AST = ?ATOM(_)) ->
     {AST, State};
-do_refl_type(Self, State, {type, Line, map, Args0}) -> %% Maps are special
-  Args = case Args0 of
-           any -> [];
-           _   -> error(not_implemented)
-         end,
+do_refl_type(_, State, {type, Line, map, any}) -> %% Maps are special
   {?rcall(?typerefl_module, map, []), State};
+do_refl_type(Self, State0, {type, Line, map, Args}) -> %% Maps are special
+  %% Separate diffetent kinds of map fields:
+  Fuzzy0 = [{Key, Val} || {type, _, map_field_assoc, [Key, Val]} <- Args],
+  Strict0 = [{Key, Val} || {type, _, map_field_exact, [Key, Val]} <- Args],
+  %% Reflect nested fuzzy types:
+  {Fuzzy1, State1} = lists:mapfoldl( fun({K0, V0}, S0) ->
+                                         {K, S1} = do_refl_type(Self, S0, K0),
+                                         {V, S} = do_refl_type(Self, S1, V0),
+                                         {{K, V}, S}
+                                     end
+                                   , State0
+                                   , Fuzzy0),
+  %% Reflect nested strict types:
+  {Strict1, State} = lists:mapfoldl( fun({K, V0}, S0) ->
+                                         {V, S} = do_refl_type(Self, S0, V0),
+                                         {{K, V}, S}
+                                     end
+                                   , State1
+                                   , Strict0),
+  %% Create field spec AST:
+  Fuzzy = [?tuple([?atom(fuzzy), K, V]) || {K, V} <- Fuzzy1],
+  Strict = [?tuple([?atom(strict), K, V]) || {K, V} <- Strict1],
+  ?log("~p: Fuzzy fields: ~p", [Self, Fuzzy]),
+  ?log("~p: Strict fields: ~p", [Self, Strict]),
+  ArgAST = mk_literal_list(Line, Fuzzy ++ Strict),
+  %% Create `typerefl:map/1' call and return:
+  {?rcall(?typerefl_module, map, [ArgAST]), State};
 do_refl_type(Self, State, {Qualifier, Line, Name, Args})
   when Qualifier =:= type; Qualifier =:= user_type ->
   do_refl_type_call(Self, State, Line, {Name, Args});
@@ -230,10 +265,8 @@ maybe_refl_type( TRef
                ) ->
   case {maps:is_key(TRef, LT), maps:is_key(TRef, RT)} of
     {true, false} ->
-      State1 = State0#s{ reflected_types =
-                           RT #{TRef => in_progress}
-                       },
-      refl_type(TRef, State1);
+      ?log("Reflecting a new type: ~p", [TRef]),
+      refl_type(TRef, State0);
     _ ->
       State0
   end.
@@ -293,11 +326,6 @@ transform_type_args(Parent, Line, State0, Name, Args0) ->
              Args1
          end,
   {Args, State}.
-
-%% literal_list(_, {nil, _}) ->
-%%   [];
-%% literal_list(Fun, {cons, _, Val, Tail}) ->
-%%   [Fun(Val) | literal_list(Fun, Tail)].
 
 mk_literal_list(Line, _, []) ->
   {nil, Line};
