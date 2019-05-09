@@ -287,9 +287,11 @@ map(FieldSpecs) ->
   StrictFieldNames = [io_lib:format("~p := ~s", [K, name(V)]) || {K, V} <- Strict],
   FuzzyFieldNames = [io_lib:format("~s => ~s", [name(K), name(V)]) || {K, V} <- Fuzzy],
   {?type_refl, #{ check => fun(Term) ->
-                              validate_map(Fuzzy, Strict, Term)
-                          end
+                               validate_map(Fuzzy, Strict, Term)
+                           end
                 , name => ["#{", intercalate(StrictFieldNames ++ FuzzyFieldNames, ", "), "}"]
+                , fuzzy_map_fields => Fuzzy
+                , strict_map_fields => Strict
                 }}.
 
 -spec iolist() -> type().

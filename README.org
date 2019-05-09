@@ -1,0 +1,61 @@
+#+TITLE: Typerefl
+
+[[https://travis-ci.org/k32/typerefl.svg?branch=master]]
+
+This library reifies dialyzer types as ordinary Erlang functions. It
+enables e.g. validation of terms against dialyzer typespecs in the
+runtime.
+
+* Talk is cheap, show me the code
+
+Simple example using builtin types:
+
+#+BEGIN_SRC erlang
+-include_lib("typerefl/include/types.hrl").
+
+main() ->
+  %% Define type (in the term Universe!)
+  Type = {foo, non_neg_integer(), #{atom() => integer()}},
+  %% Valid term:
+  ok = typerefl:typecheck(Type, {foo, 3, #{bar => 42}}),
+  %% Invalid term:
+  {error,"Expected: {foo, non_neg_integer(), #{atom() => integer()}}\nGot: 1\n"} =
+    typerefl:typecheck(Type, 1).
+#+END_SRC
+
+Higher kind recursive types are of course supported too:
+
+#+BEGIN_SRC erlang
+-include_lib("typerefl/include/types.hrl").
+
+-type stupid_list(A, B) :: {cons, A, stupid_list(A, B)} | B.
+
+-type stupid_list(A) :: stupid_list(A, nil).
+
+%% Any dialyzer type can be reified:
+-reflect_type([stupid_list/1]).
+
+main() ->
+  ok = typerefl:typecheck(stupid_list(atom()), {cons, foo, nil}),
+  {error, _} = typerefl:typecheck(stupid_list(atom()), {cons, 1, nil}).
+#+END_SRC
+
+Maps:
+
+#+BEGIN_SRC erlang
+
+-include_lib("typerefl/include/types.hrl").
+
+-type foo() :: #{ foo := integer()
+                , bar := atom()
+                , integer() => list()
+                }.
+
+-reflect_type([foo/1]).
+
+main() ->
+  ok = typerefl:typecheck(foo(), #{foo := 1, bar := foo, 1 => []}).
+#+END_SRC
+
+This library typechecks pretty much anything that dialyzer does,
+except for functions. In the future it may support arity check.

@@ -12,10 +12,12 @@
 
 -define(typeEqual(A, B), typeEqual(?add_module(??B), A, B)).
 
+-define(mapTypeEqual(A, B), mapTypeEqual(?add_module(??B), A, B)).
+
 -reflect_type([ mybool/0, myterm1/0, myterm2/0, my_int/0, my_byte/0
               , list_of_bools/0, non_empty_list_of_bools/0, mylist0/0, strings/0
               , foo_atom/0, foobarbaz/0, mytuple/0, simple/1, stupid_list/1
-              , mymap1/0, remote_types/0
+              , mymap/0, remote_types/0
               ]).
 
 %% -----------------------------------------------------------------------------
@@ -101,8 +103,24 @@ higher_kind_refl_test() ->
 
 -type mymap1() :: map().
 
+-type mymap2() :: #{integer() => atom()}.
+
+-type mymap3() :: #{foo := integer()}.
+
+-type mymap() :: #{ mymap1() => mymap2()
+                  , integer() => mymap3()
+                  , bar := {integer(), integer()}
+                  }.
+
 map_refl_test() ->
-  ?typeEqual(map(), mymap1()).
+  ?typeEqual(map(), mymap1()),
+  ?mapTypeEqual(typerefl:map([{fuzzy, integer(), atom()}]), mymap2()),
+  ?mapTypeEqual(typerefl:map([{strict, foo, integer()}]), mymap3()),
+  MyMap = typerefl:map([ {fuzzy, mymap1(), mymap2()}
+                       , {fuzzy, integer(), mymap3()}
+                       , {strict, bar, typerefl:tuple([integer(), integer()])}
+                       ]),
+  ?mapTypeEqual(MyMap, mymap()).
 
 %% -----------------------------------------------------------------------------
 
@@ -142,11 +160,8 @@ typeEqual(ExpectedName0, A0, B0) ->
   {?type_refl, A} = A0,
   {?type_refl, B} = B0,
   %% 1. Check name of the type:
-  FixName = fun(Str) -> [I || I <- lists:flatten(Str)
-                                , I =/= $  ]
-            end,
-  ExpectedName = FixName(ExpectedName0),
-  Name = FixName(maps:get(name, B)),
+  ExpectedName = fix_name(ExpectedName0),
+  Name = fix_name(maps:get(name, B)),
   ?assertEqual(ExpectedName, Name),
   %% 2. Check definition (TODO)
   %%?assertEqual((A)#type.name, (B)#type.definition),
@@ -154,3 +169,17 @@ typeEqual(ExpectedName0, A0, B0) ->
   ExpectedCheck = maps:get(check, A),
   Check = maps:get(check, B),
   ?assertEqual(ExpectedCheck, Check).
+
+mapTypeEqual(ExpectedName0, {?type_refl, A}, {?type_refl, B}) ->
+  %% Check field specs:
+  #{ fuzzy_map_fields := FA
+   , strict_map_fields := SA
+   } = A,
+  #{ fuzzy_map_fields := FB
+   , strict_map_fields := SB
+   } = B,
+  ?assertEqual(lists:sort(SA), lists:sort(SB)),
+  ?assertEqual(lists:sort(FA), lists:sort(FB)).
+
+fix_name(Str) ->
+  [I || I <- lists:flatten(Str), I =/= $  ].
