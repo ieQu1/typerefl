@@ -3,7 +3,7 @@
 -include("typerefl_int.hrl").
 
 %% API
--export([typecheck/2, print/1]).
+-export([typecheck/2, print/1, from_string/2]).
 
 %% Type reflections (Copy verbatim to types.hrl)
 -export([ any/0, atom/0, binary/0, boolean/0, float/0, function/0
@@ -73,8 +73,7 @@ alias(Name, Type) ->
   {?type_refl, Map} = Type,
   {?type_refl, Map#{name => Name}}.
 
--spec typecheck(type() | tuple() | [type(), ...], term()) ->
-                   ok | {error, string()}.
+-spec typecheck(type(), term()) -> ok | {error, string()}.
 typecheck(Type, Term) ->
   case check(Type, Term) of
     true ->
@@ -87,7 +86,7 @@ typecheck(Type, Term) ->
       {error, lists:flatten(Result)}
   end.
 
--spec print(type() | tuple() | [type(), ...]) -> iolist().
+-spec print(type()) -> iolist().
 print(Type) ->
   case defn(Type) of
     [] ->
@@ -96,6 +95,42 @@ print(Type) ->
       io_lib:format( "~s when~n  ~s."
                    , [name(Type), string:join(lists:usort(Defn), ",~n  ")])
   end.
+
+%% @doc Try to parse string or a list of strings in a smart way:
+%% convert the string to atom in case `Type' is `atom()', leave input
+%% as is when `Type' is `string()' and try to parse the string as an
+%% erlang term otherwise.
+%%
+%% When `Type' is `list(A)' and the second argument is a list of
+%% strings, apply this transform (with type `A') to each element of
+%% the list.
+%%
+%% @note It does NOT check type of the resulting term
+-spec from_string(type(), string() | [string()]) -> {ok, term()} | error.
+from_string(Type, Strings = [Hd|_]) when is_list(Hd) ->
+  {?type_refl, #{args := [T]}} = Type,
+  try
+    {ok, [case from_string(T, I) of
+            {ok, Term} -> Term;
+            error      -> throw(error)
+          end || I <- Strings]}
+  catch error -> error
+  end;
+from_string(Type = {?type_refl, #{}}, Str) ->
+  StrT = string(),
+  AtomT = atom(),
+  case Type of
+    StrT ->
+      {ok, Str};
+    AtomT ->
+      {ok, list_to_atom(Str)};
+    _ ->
+      string_to_term(Str)
+  end;
+from_string(Type, Str) when is_atom(Type) -> %% Weird, but ok
+  string_to_term(Str);
+from_string(Type0, Str) ->
+  from_string(desugar(Type0), Str).
 
 %%====================================================================
 %% Type reflections
@@ -183,7 +218,8 @@ tuple() ->
 union(A, B) ->
   {?type_refl, #{ check => or_else(check(A), check(B))
                 , name => [name(A), " | ", name(B)]
-                %, definition => defn(A) ++ defn(B) TODO
+                , definition => [defn(A), defn(B)]
+                , args => [A, B]
                 }}.
 
 -spec union([type(), ...]) -> type().
@@ -196,6 +232,7 @@ tuple(Args) ->
   {?type_refl, #{ check => validate_tuple(Args)
                 , name => ["{", string:join([name(I) || I <- Args], ", "), "}"]
                 , definition => lists:append([defn(I) || I <- Args])
+                , args => Args
                 }}.
 
 %% @doc Reflection of `[A]' type
@@ -203,6 +240,7 @@ tuple(Args) ->
 list(A) ->
   {?type_refl, #{ check => validate_list(A, nil(), true)
                 , name => ["[", name(A), "]"]
+                , args => [A]
                 }}.
 
 %% @doc Reflection of `[A,...]' type
@@ -210,12 +248,14 @@ list(A) ->
 nonempty_list(A) ->
   {?type_refl, #{ check => validate_list(A, nil(), false)
                 , name => ["[", name(A), ",...]"]
+                , args => [A]
                 }}.
 
 -spec maybe_improper_list(type(), type()) -> type().
 maybe_improper_list(A, B) ->
   {?type_refl, #{ check => validate_list(A, B, true)
                 , name => io_lib:format("maybe_improper_list(~s, ~s)", [name(A), name(B)])
+                , args => [A, B]
                 }}.
 
 -spec maybe_improper_list() -> type().
@@ -226,6 +266,7 @@ maybe_improper_list() ->
 nonempty_maybe_improper_list(A, B) ->
   {?type_refl, #{ check => validate_list(A, B, false)
                 , name => io_lib:format("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
+                , args => [A, B]
                 }}.
 
 -spec nonempty_maybe_improper_list() -> type().
@@ -289,7 +330,7 @@ map(FieldSpecs) ->
   {?type_refl, #{ check => fun(Term) ->
                                validate_map(Fuzzy, Strict, Term)
                            end
-                , name => ["#{", intercalate(StrictFieldNames ++ FuzzyFieldNames, ", "), "}"]
+                , name => ["#{", lists:join(", ", StrictFieldNames ++ FuzzyFieldNames), "}"]
                 , fuzzy_map_fields => Fuzzy
                 , strict_map_fields => Strict
                 }}.
@@ -486,12 +527,20 @@ make_lazy(Name, Fun, Args) ->
             , thunk = fun() -> apply(Fun, Args) end
             }.
 
-intercalate([], _) ->
-  [];
-intercalate([A], _) ->
-  [A];
-intercalate([A|T], S) ->
-  [A, S | intercalate(T, S)].
+-spec string_to_term(string()) -> {ok, term()} | error.
+string_to_term(String) ->
+  case erl_scan:string(String) of
+    {ok, Tok0, _} ->
+      Tok = Tok0 ++ [{dot, 1}],
+      case erl_parse:parse_term(Tok) of
+        {ok, Term} ->
+          {ok, Term};
+        {error, {_, _, Err}} ->
+          error
+      end;
+    _ ->
+      error
+  end.
 
 %% @private CPS version of andalso operator
 %% -spec and_also(F, F) -> F when F :: ccont().

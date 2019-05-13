@@ -54,7 +54,7 @@ Maps:
 -reflect_type([foo/1]).
 
 main() ->
-  ok = typerefl:typecheck(foo(), #{foo := 1, bar := foo, 1 => []}).
+  ok = typerefl:typecheck(foo(), #{foo => 1, bar => foo, 1 => []}).
 #+END_SRC
 
 This library typechecks pretty much anything that dialyzer does,

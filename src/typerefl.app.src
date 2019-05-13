@@ -5,6 +5,5 @@
               {applications,[kernel,stdlib]},
               {env,[]},
               {modules,[]},
-              {maintainers,[]},
               {licenses,["public domain"]},
               {links,[{"Github","https://github.com/k32/typerefl"}]}]}.
