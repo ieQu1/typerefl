@@ -17,7 +17,7 @@
         ]).
 
 %% Internal
--export([fix_t/4, make_lazy/3, alias/2]).
+-export([fix_t/4, make_lazy/3, alias/2, alias/4]).
 
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
@@ -49,7 +49,7 @@
 
 -type prim_type() :: {?type_refl, #{ check := ccont()
                                    , name := typename()
-                                   , definition => iolist()
+                                   , definition => {typename(), iolist()}
                                    }}.
 
 -type type_intern() :: prim_type()
@@ -70,8 +70,19 @@
 %%====================================================================
 
 alias(Name, Type) ->
+  alias(Name, Type, [], []).
+
+-spec alias(string(), type(), [atom()], [term()]) -> type().
+alias(Name0, Type, TypeVars0, Args) ->
+  TypeVars = [?type_var(I) || I <- TypeVars0],
   {?type_refl, Map} = Type,
-  {?type_refl, Map#{name => Name}}.
+  Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
+  OldName = maps:get(name, Map),
+  OldDefn = maps:get(definition, Map, []),
+  {?type_refl, Map#{ name => Name
+                   , definition =>
+                       [{Name, OldName} | OldDefn]
+                   }}.
 
 -spec typecheck(type(), term()) -> ok | {error, string()}.
 typecheck(Type, Term) ->
@@ -80,20 +91,24 @@ typecheck(Type, Term) ->
       ok;
     {false, Stack0} ->
       %% TODO: do something with stack
-      Result = io_lib:format( "Expected: ~s~nGot: ~p~n"
-                            , [name(Type), Term]
+      Result = io_lib:format( "Expected type: ~s~nGot: ~p~n"
+                            , [print(Type), Term]
                             ),
       {error, lists:flatten(Result)}
   end.
 
 -spec print(type()) -> iolist().
 print(Type) ->
-  case defn(Type) of
+  Defn0 = defn(Type),
+  Defn1 = lists:usort(lists:flatten(Defn0)),
+  case Defn1 of
     [] ->
       name(Type);
-    Defn ->
+    _ ->
+      Defn = [lists:flatten(io_lib:format("~s :: ~s", [K, V]))
+              || {K, V} <- Defn1],
       io_lib:format( "~s when~n  ~s."
-                   , [name(Type), string:join(lists:usort(Defn), ",~n  ")])
+                   , [name(Type), string:join(Defn, ",\n  ")])
   end.
 
 %% @doc Try to parse string or a list of strings in a smart way:
@@ -231,7 +246,7 @@ union([H|Rest]) ->
 tuple(Args) ->
   {?type_refl, #{ check => validate_tuple(Args)
                 , name => ["{", string:join([name(I) || I <- Args], ", "), "}"]
-                , definition => lists:append([defn(I) || I <- Args])
+                , definition => [defn(I) || I <- Args]
                 , args => Args
                 }}.
 
@@ -285,11 +300,11 @@ range(Min, Max) ->
 
 -spec char() -> type().
 char() ->
-  alias("char()", range(0, 16#10ffff)).
+  alias("char", range(0, 16#10ffff)).
 
 -spec arity() -> type().
 arity() ->
-  alias("arity()", range(0, 255)).
+  alias("arity", range(0, 255)).
 
 -spec byte() -> type().
 byte() ->
@@ -301,7 +316,7 @@ module() ->
 
 -spec non_neg_integer() -> type().
 non_neg_integer() ->
-  alias("non_neg_integer()", range(0, inf)).
+  alias("non_neg_integer", range(0, inf)).
 
 -spec node() -> type().
 node() ->
@@ -309,11 +324,11 @@ node() ->
 
 -spec string() -> type().
 string() ->
-  alias("string()", list(char())).
+  alias("string", list(char())).
 
 -spec nonempty_string() -> type().
 nonempty_string() ->
-  alias("nonempty_string()", nonempty_list(char())).
+  alias("nonempty_string", nonempty_list(char())).
 
 -spec nil() -> type().
 nil() ->
@@ -340,7 +355,7 @@ iolist() ->
   Self = make_lazy("iolist()", fun iolist/0, []),
   Elem = union([byte(), binary(), Self]),
   Tail = union(binary(), nil()),
-  alias("iolist()", maybe_improper_list(Elem, Tail)).
+  alias("iolist", maybe_improper_list(Elem, Tail)).
 
 -spec iodata() -> type().
 iodata() ->
@@ -351,8 +366,10 @@ iodata() ->
 %%====================================================================
 
 %% @private Get type name
--spec name(type()) -> iolist().
+-spec name(type() | ?type_var(atom())) -> iolist().
 name(A) when is_atom(A) ->
+  atom_to_list(A);
+name(?type_var(A)) ->
   atom_to_list(A);
 name({?type_refl, #{name := Name}}) ->
   Name;
@@ -361,12 +378,14 @@ name(#lazy_type{name = Name}) ->
 name(T) ->
   name(desugar(T)).
 
-%% @private Get type definition (relevant for user-defined types)
+%% @private Get type definition (relevant for alias types)
 -spec defn(type()) -> iolist().
-defn({?type_refl, Map}) ->
-  maps:get(definition, Map, []);
 defn(#lazy_type{name = Name}) ->
   Name;
+defn(?type_var(_)) ->
+  [];
+defn(Type = {?type_refl, Map}) ->
+  maps:get(definition, Map, []);
 defn(A) when is_atom(A) ->
   [];
 defn(Type) ->
@@ -541,13 +560,3 @@ string_to_term(String) ->
     _ ->
       error
   end.
-
-%% @private CPS version of andalso operator
-%% -spec and_also(F, F) -> F when F :: ccont().
-%% and_also(A, B) ->
-%%   fun(Term) ->
-%%       case A(Term) of
-%%         true -> B(Term);
-%%         Ret  -> Ret
-%%       end
-%%   end.

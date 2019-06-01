@@ -92,9 +92,8 @@ tuple_refl_test() ->
 -type stupid_list(OwO) :: {cons, OwO, stupid_list(OwO)} | nil.
 
 higher_kind_refl_test() ->
-  SimpleName = ?add_module("simple(A)"),
-  typeEqual(SimpleName, atom(), simple(atom())),
-  typeEqual(SimpleName, list(atom()), simple(list(atom()))),
+  typeEqual(?add_module("simple(atom())"), atom(), simple(atom())),
+  typeEqual(?add_module("simple([atom()])"), list(atom()), simple(list(atom()))),
   %% TODO can't simply check StupidList check function here... So just
   %% running reflection for it.
   ok.
