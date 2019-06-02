@@ -36,7 +36,8 @@
         }).
 
 -define(typerefl_module, typerefl).
--define(lazy_self_var, {var, Line, '__Self'}).
+-define(lazy_self_var, {var, Line, '__TypeReflSelf'}).
+-define(type_vars_var, {var, Line, '__TypeReflTypeVars'}).
 
 %% Naming convention: uppercase macros are for matching, lower-case
 %% are for generation (they contain Line as a free variable)
@@ -280,24 +281,27 @@ make_reflection_function( Module
                                   , name = Name
                                   , line = Line
                                   }) ->
+  Arity = length(Vars0),
   Vars = [{var, Line, Var} || Var <- Vars0],
-  Arity = length(Vars),
-  NameStr = io_lib:format("~p:~p(~s)",
-                          [ Module
-                          , Name
-                          , string:join([atom_to_list(I) || I <- Vars0], ", ")
-                          ]),
+  SymbolicVars = mk_literal_list(Line, [?atom(I) || I <- Vars0]),
+  NameStr = io_lib:format("~p:~p", [Module, Name]),
   NameAST = {string, Line, lists:flatten(NameStr)},
   SelfAST = {'fun', Line, {function, Name, Arity}},
   LazySelfAST = ?rcall(?typerefl_module, make_lazy,
                        [ NameAST
                        , SelfAST
-                       , mk_literal_list(Line, Vars)
+                       , ?type_vars_var
                        ]),
   {function, Line, Name, Arity,
    [{clause, Line, Vars, []
-    , [ {match, Line, ?lazy_self_var, LazySelfAST}
-      , ?rcall(?typerefl_module, alias, [NameAST, AST])
+    , [ {match, Line, ?type_vars_var, mk_literal_list(Line, Vars)}
+      , {match, Line, ?lazy_self_var, LazySelfAST}
+      , ?rcall(?typerefl_module, alias,
+               [ NameAST
+               , AST
+               , SymbolicVars
+               , ?type_vars_var
+               ])
       ]}
    ]}.
 
