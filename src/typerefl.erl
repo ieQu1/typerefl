@@ -122,6 +122,17 @@ print(Type) ->
 %%
 %% @note It does NOT check type of the resulting term
 -spec from_string(type(), string() | [string()]) -> {ok, term()} | error.
+from_string(Type, []) ->
+  %% This is quite sketchy, but _the only_ valid values parsable from
+  %% an empty string are `[]' and atom ''. It's typechecker's job to
+  %% prove this assumption wrong.
+  Atom = atom(),
+  case Type of
+    Atom ->
+      {ok, ''};
+    _ ->
+      {ok, []}
+  end;
 from_string(Type, Strings = [Hd|_]) when is_list(Hd) ->
   {?type_refl, #{args := [T]}} = Type,
   try
