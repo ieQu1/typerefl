@@ -14,11 +14,15 @@ from_string_test() ->
   ?assertMatch({ok, 1}, typerefl:from_string(integer(), "1")),
   ?assertMatch({ok, 1.1}, typerefl:from_string(float(), "1.1")),
   ?assertMatch({ok, {foo, "bar", []}}, typerefl:from_string(term(), "{foo, \"bar\", []}")),
-  ?assertMatch(error, typerefl:from_string(boolean(), "")),
+  ?assertMatch(error, typerefl:from_string(boolean(), "}")),
   ?assertMatch(error, typerefl:from_string(boolean(), ",")),
   ok.
 
 from_strings_test() ->
+  ?assertMatch( {ok, []}
+              , typerefl:from_string(list(string()), "")),
+  ?assertMatch( {ok, [[]]}
+              , typerefl:from_string(list(string()), [""])),
   ?assertMatch( {ok, ["foo", "bar"]}
               , typerefl:from_string(list(string()), ["foo", "bar"])),
   ?assertMatch( {ok, [true]}
@@ -36,6 +40,6 @@ from_strings_test() ->
   ?assertMatch( {ok, [{foo, "bar", []}]}
               , typerefl:from_string(list(term()), ["{foo, \"bar\", []}"])),
   ?assertMatch( error
-              , typerefl:from_string(list(boolean()), [""])),
+              , typerefl:from_string(list(boolean()), ["}"])),
   ?assertMatch( error
               , typerefl:from_string(list(boolean()), [","])).
