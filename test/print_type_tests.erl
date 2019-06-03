@@ -39,9 +39,16 @@ union_test() ->
               , lists:flatten(typerefl:print(union(foo, bar)))
               ).
 
+byte_test() ->
+  ?assertMatch( "byte() when\n"
+                "  byte() :: 0..255."
+              , lists:flatten(typerefl:print(byte()))
+              ).
+
 iolist_test() ->
   ?assertMatch( "iolist() when\n"
-                "  iolist() :: maybe_improper_list(iolist() | binary() | 0..255, binary() | [])."
+                "  byte() :: 0..255,\n"
+                "  iolist() :: maybe_improper_list(iolist() | binary() | byte(), binary() | [])."
               , lists:flatten(typerefl:print(iolist()))
               ).
 
