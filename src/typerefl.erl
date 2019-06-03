@@ -3,7 +3,7 @@
 -include("typerefl_int.hrl").
 
 %% API
--export([typecheck/2, print/1, from_string/2]).
+-export([typecheck/2, print/1, from_string/2, from_string_/2]).
 
 %% Type reflections (Copy verbatim to types.hrl)
 -export([ any/0, atom/0, binary/0, boolean/0, float/0, function/0
@@ -42,10 +42,12 @@
 
 -define(is_thunk(A), is_function(A, 0)).
 
--define(prim(Name, Check),
+-define(prim(Name, Check, Rest),
         {?type_refl, #{ check => fun erlang:Check/1
                       , name => ??Name "()"
-                      }}).
+                      } Rest}).
+
+-define(prim(Name, Check), ?prim(Name, Check, #{})).
 
 -type prim_type() :: {?type_refl, #{ check := ccont()
                                    , name := typename()
@@ -69,11 +71,25 @@
 %% API functions
 %%====================================================================
 
+%% @private Create an alias for a type.
+%% @equiv alias(Name, Type, [], [])
+-spec alias(string(), type()) -> type().
 alias(Name, Type) ->
   alias(Name, Type, [], []).
 
--spec alias(string(), type(), [atom()], [term()]) -> type().
+%% @private Create an alias for a higher-kind type
+%%
+%% Example:
+%% ```
+%% alias("lists", list(list('A')), ['A'], [bool()])
+%% '''
+%%
+%% @param Name0 Name of the new type
+%% @param TypeVars0 Symbolic names of type variables
+%% @param Args Values of type variables
+-spec alias(string(), type(), [atom()], [type()]) -> type().
 alias(Name0, Type, TypeVars0, Args) ->
+  %% TODO: Args? Why is it applied?
   TypeVars = [?type_var(I) || I <- TypeVars0],
   {?type_refl, Map} = Type,
   Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
@@ -84,6 +100,13 @@ alias(Name0, Type, TypeVars0, Args) ->
                        [{Name, OldName} | OldDefn]
                    }}.
 
+%% @doc Check type of a term.
+%%
+%% Example:
+%% ```
+%% ok = typecheck(integer(), 12),
+%% {error, _} = typecheck(integer(), [])
+%% '''
 -spec typecheck(type(), term()) -> ok | {error, string()}.
 typecheck(Type, Term) ->
   case check(Type, Term) of
@@ -97,6 +120,7 @@ typecheck(Type, Term) ->
       {error, lists:flatten(Result)}
   end.
 
+%% @doc Print definition of a type.
 -spec print(type()) -> iolist().
 print(Type) ->
   Defn0 = defn(Type),
@@ -111,52 +135,60 @@ print(Type) ->
                    , [name(Type), string:join(Defn, ",\n  ")])
   end.
 
-%% @doc Try to parse string or a list of strings in a smart way:
-%% convert the string to atom in case `Type' is `atom()', leave input
-%% as is when `Type' is `string()' and try to parse the string as an
-%% erlang term otherwise.
+%% @doc Try to parse a string or a list of strings in a smart way:
+%% convert the string to atom when `Type' is `atom()', leave input as
+%% is when `Type' is `string()' and try to parse the string as erlang
+%% term otherwise.
 %%
 %% When `Type' is `list(A)' and the second argument is a list of
-%% strings, apply this transform (with type `A') to each element of
-%% the list.
+%% strings, the above transform is applied (with type `A') to each
+%% element of the list.
 %%
-%% @note It does NOT check type of the resulting term
--spec from_string(type(), string() | [string()]) -> {ok, term()} | error.
-from_string(Type, []) ->
+%% Note: It does NOT check type of the resulting term
+-spec from_string(type(), string() | [string()]) ->
+                     {ok, term()} | {error, string()}.
+from_string(Type, String) ->
+  try from_string_(Type, String) of
+      Val -> {ok, Val}
+  catch
+    Err -> Err
+  end.
+
+%% @doc Version of `from_string/2' that throws an exception instead of
+%% returning error-tuple
+%%
+%% @throws {error, string()}
+%%
+%% @see from_string/2
+-spec from_string_(type(), string() | [string()]) -> term().
+from_string_(Type, []) ->
   %% This is quite sketchy, but _the only_ valid values parsable from
   %% an empty string are `[]' and atom ''. It's typechecker's job to
   %% prove this assumption wrong.
-  Atom = atom(),
   case Type of
-    Atom ->
-      {ok, ''};
-    _ ->
-      {ok, []}
+    {?type_refl, #{from_string := Fun}} ->
+      Fun([]);
+    '' -> '';
+    _  -> []
   end;
-from_string(Type, Strings = [Hd|_]) when is_list(Hd) ->
+from_string_(Type, Strings = [Hd|_]) when is_list(Hd) ->
   {?type_refl, #{args := [T]}} = Type,
-  try
-    {ok, [case from_string(T, I) of
-            {ok, Term} -> Term;
-            error      -> throw(error)
-          end || I <- Strings]}
-  catch error -> error
+  [from_string_(T, I) || I <- Strings];
+from_string_({?type_refl, Type}, Str) ->
+  Fun = maps:get( from_string
+                , Type
+                , fun string_to_term/1
+                ),
+  Fun(Str);
+from_string_(Type, Str) when is_atom(Type) -> %% Weird, but ok
+  case atom_to_list(Type) of
+    Str ->
+      Type;
+    Expected ->
+      throw({error, "Expected: " ++ Expected ++ ", got:" ++ Str})
   end;
-from_string(Type = {?type_refl, #{}}, Str) ->
-  StrT = string(),
-  AtomT = atom(),
-  case Type of
-    StrT ->
-      {ok, Str};
-    AtomT ->
-      {ok, list_to_atom(Str)};
-    _ ->
-      string_to_term(Str)
-  end;
-from_string(Type, Str) when is_atom(Type) -> %% Weird, but ok
-  string_to_term(Str);
-from_string(Type0, Str) ->
-  from_string(desugar(Type0), Str).
+from_string_(Type0, Str) ->
+  from_string_(desugar(Type0), Str).
 
 %%====================================================================
 %% Type reflections
@@ -170,7 +202,7 @@ any() ->
 %% @doc Reflection of `atom()' type
 -spec atom() -> type().
 atom() ->
-  ?prim(atom, is_atom).
+  ?prim(atom, is_atom, #{from_string => fun list_to_atom/1}).
 
 %% @doc Reflection of `binary()' type
 -spec binary() -> type().
@@ -248,6 +280,7 @@ union(A, B) ->
                 , args => [A, B]
                 }}.
 
+%% @doc Reflection of `A | ...' type
 -spec union([type(), ...]) -> type().
 union([H|Rest]) ->
   lists:foldl(fun union/2, H, Rest).
@@ -267,6 +300,7 @@ list(A) ->
   {?type_refl, #{ check => validate_list(A, nil(), true)
                 , name => ["[", name(A), "]"]
                 , args => [A]
+                , definition => defn(A)
                 }}.
 
 %% @doc Reflection of `[A,...]' type
@@ -275,30 +309,41 @@ nonempty_list(A) ->
   {?type_refl, #{ check => validate_list(A, nil(), false)
                 , name => ["[", name(A), ",...]"]
                 , args => [A]
+                , definition => defn(A)
                 }}.
 
+%% @doc Reflection of `maybe_improper_list(A, B)' type
 -spec maybe_improper_list(type(), type()) -> type().
 maybe_improper_list(A, B) ->
   {?type_refl, #{ check => validate_list(A, B, true)
                 , name => io_lib:format("maybe_improper_list(~s, ~s)", [name(A), name(B)])
                 , args => [A, B]
+                , definition => [defn(A), defn(B)]
                 }}.
 
+%% @doc Reflection of `maybe_improper_list()' type
 -spec maybe_improper_list() -> type().
 maybe_improper_list() ->
   maybe_improper_list(term(), term()).
 
+%% @doc Reflection of `nonempty_maybe_improper_list(A, B)' type
 -spec nonempty_maybe_improper_list(type(), type()) -> type().
 nonempty_maybe_improper_list(A, B) ->
   {?type_refl, #{ check => validate_list(A, B, false)
                 , name => io_lib:format("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
                 , args => [A, B]
+                , definition => [defn(A), defn(B)]
                 }}.
 
+%% @doc Reflection of `nonempty_maybe_improper_list()' type
 -spec nonempty_maybe_improper_list() -> type().
 nonempty_maybe_improper_list() ->
   nonempty_maybe_improper_list(term(), term()).
 
+%% @doc Reflection of `A .. B' type
+%%
+%% Valid values of `A' and `B' are integers and atoms `inf'
+%% and <code>'-inf'</code> denoting
 -spec range(integer() | '-inf', integer() | inf) -> type().
 range(Min, Max) ->
   {?type_refl, #{ check => fun(I) when is_integer(I) ->
@@ -309,44 +354,56 @@ range(Min, Max) ->
                 , name => io_lib:format("~p..~p", [Min, Max])
                 }}.
 
+%% @doc Reflection of `char()' type
 -spec char() -> type().
 char() ->
   alias("char", range(0, 16#10ffff)).
 
+%% @doc Reflection of `arity()' type
 -spec arity() -> type().
 arity() ->
   alias("arity", range(0, 255)).
 
+%% @doc Reflection of `byte()' type
 -spec byte() -> type().
 byte() ->
-  range(0, 255).
+  alias("byte", range(0, 255)).
 
+%% @doc Reflection of `module()' type
 -spec module() -> type().
 module() ->
   ?prim(module, is_atom).
 
+%% @doc Reflection of `non_neg_integer()' type
 -spec non_neg_integer() -> type().
 non_neg_integer() ->
   alias("non_neg_integer", range(0, inf)).
 
+%% @doc Reflection of `node()' type
 -spec node() -> type().
 node() ->
   ?prim(node, is_atom).
 
+%% @doc Reflection of `string()' type
 -spec string() -> type().
 string() ->
-  alias("string", list(char())).
+  {?type_refl, R0} = alias("string", list(char())),
+  {?type_refl, R0 #{from_string => fun id/1}}.
 
+%% @doc Reflection of `nonempty_string()' type
 -spec nonempty_string() -> type().
 nonempty_string() ->
-  alias("nonempty_string", nonempty_list(char())).
+  {?type_refl, R0} = alias("nonempty_string", nonempty_list(char())),
+  {?type_refl, R0 #{from_string => fun id/1}}.
 
+%% @doc Reflection of `nil()' type
 -spec nil() -> type().
 nil() ->
   {?type_refl, #{ check => fun(T) -> T =:= [] end
                 , name => "[]"
                 }}.
 
+%% @doc Reflection of `#{...}' type
 -spec map([map_field_spec()]) -> type().
 map(FieldSpecs) ->
   Fuzzy = [{K, V} || {fuzzy, K, V} <- FieldSpecs],
@@ -361,6 +418,7 @@ map(FieldSpecs) ->
                 , strict_map_fields => Strict
                 }}.
 
+%% @doc Reflection of `iolist()' type
 -spec iolist() -> type().
 iolist() ->
   Self = make_lazy("iolist()", fun iolist/0, []),
@@ -368,6 +426,7 @@ iolist() ->
   Tail = union(binary(), nil()),
   alias("iolist", maybe_improper_list(Elem, Tail)).
 
+%% @doc Reflection of `iodata()' type
 -spec iodata() -> type().
 iodata() ->
   union(iolist(), binary()).
@@ -550,24 +609,29 @@ fix_t(Name, F, G, Args) ->
   H = make_lazy(Name, F, Args),
   G(H).
 
-%% @private
+%% @private Make a thunk
 -spec make_lazy(iolist(), fun(), [term()]) -> type().
 make_lazy(Name, Fun, Args) ->
   #lazy_type{ name = Name
             , thunk = fun() -> apply(Fun, Args) end
             }.
 
--spec string_to_term(string()) -> {ok, term()} | error.
+%% @private Parse string as an Erlang term
+-spec string_to_term(string()) -> term().
 string_to_term(String) ->
   case erl_scan:string(String) of
     {ok, Tok0, _} ->
       Tok = Tok0 ++ [{dot, 1}],
       case erl_parse:parse_term(Tok) of
         {ok, Term} ->
-          {ok, Term};
+          Term;
         {error, {_, _, Err}} ->
-          error
+          throw({error, "Unable to parse Erlang term"})
       end;
     _ ->
-      error
+      throw({error, "Unable to tokenize Erlang term"})
   end.
+
+-spec id(A) -> A.
+id(A) ->
+  A.

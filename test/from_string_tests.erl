@@ -4,8 +4,13 @@
 -include_lib("typerefl/include/types.hrl").
 
 from_string_test() ->
+  MyAtom = typerefl:alias("my_atom", atom()),
+  MyString = typerefl:alias("my_string", string()),
   ?assertMatch({ok, ""}, typerefl:from_string(string(), "")),
   ?assertMatch({ok, ''}, typerefl:from_string(atom(), "")),
+  ?assertMatch({ok, 'foo bar'}, typerefl:from_string(atom(), "foo bar")),
+  ?assertMatch({ok, 'foo bar'}, typerefl:from_string(MyAtom, "foo bar")),
+  ?assertMatch({ok, "foo bar"}, typerefl:from_string(MyString, "foo bar")),
   ?assertMatch({ok, "foo"}, typerefl:from_string(string(), "foo")),
   ?assertMatch({ok, true},  typerefl:from_string(boolean(), "true")),
   ?assertMatch({ok, false}, typerefl:from_string(boolean(), "false")),
@@ -14,8 +19,11 @@ from_string_test() ->
   ?assertMatch({ok, 1}, typerefl:from_string(integer(), "1")),
   ?assertMatch({ok, 1.1}, typerefl:from_string(float(), "1.1")),
   ?assertMatch({ok, {foo, "bar", []}}, typerefl:from_string(term(), "{foo, \"bar\", []}")),
-  ?assertMatch(error, typerefl:from_string(boolean(), "}")),
-  ?assertMatch(error, typerefl:from_string(boolean(), ",")),
+  ?assertMatch({error, _}, typerefl:from_string(boolean(), "}")),
+  ?assertMatch({error, _}, typerefl:from_string(boolean(), ",")),
+  ?assertMatch({ok, foo}, typerefl:from_string(foo, "foo")),
+  ?assertMatch({error, _}, typerefl:from_string(foo, "bar")),
+  ?assertMatch({ok, ''}, typerefl:from_string('', "")),
   ok.
 
 from_strings_test() ->
@@ -25,6 +33,8 @@ from_strings_test() ->
               , typerefl:from_string(list(string()), [""])),
   ?assertMatch( {ok, ["foo", "bar"]}
               , typerefl:from_string(list(string()), ["foo", "bar"])),
+  ?assertMatch( {ok, ['foo bar']}
+              , typerefl:from_string(list(atom()), ["foo bar"])),
   ?assertMatch( {ok, [true]}
               , typerefl:from_string(list(boolean()), ["true"])),
   ?assertMatch( {ok, [false]}
@@ -39,7 +49,7 @@ from_strings_test() ->
               , typerefl:from_string(list(float()), ["1.1"])),
   ?assertMatch( {ok, [{foo, "bar", []}]}
               , typerefl:from_string(list(term()), ["{foo, \"bar\", []}"])),
-  ?assertMatch( error
+  ?assertMatch( {error, _}
               , typerefl:from_string(list(boolean()), ["}"])),
-  ?assertMatch( error
+  ?assertMatch( {error, _}
               , typerefl:from_string(list(boolean()), [","])).
