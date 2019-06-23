@@ -1,6 +1,6 @@
 {application,typerefl,
              [{description,"An OTP library"},
-              {vsn,"git"},
+              {vsn,"0.0.5"},
               {registered,[]},
               {applications,[kernel,stdlib]},
               {env,[]},
