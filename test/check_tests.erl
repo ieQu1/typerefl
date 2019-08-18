@@ -92,6 +92,16 @@ string_test() ->
   ?valid(nonempty_string(), "A"),
   ?invalid(nonempty_string(), "").
 
+printable_test() ->
+  ?valid(printable_unicode_list(), ""),
+  ?valid(printable_unicode_list(), "foo"),
+  ?valid(printable_unicode_list(), "(✿ ┛O‿‿O)┛彡♥   ¯\_(ツ)_/¯"),
+  ?invalid(printable_unicode_list(), [1, 0]),
+  ?valid(printable_latin1_list(), ""),
+  ?valid(printable_latin1_list(), "foo"),
+  ?invalid(printable_latin1_list(), "(✿ ┛O‿‿O)┛彡♥   ¯\_(ツ)_/¯"),
+  ?invalid(printable_latin1_list(), [1, 0]).
+
 iolist_test() ->
   ?valid(iolist(), "uh-oh"),
   ?valid(iolist(), io_lib:format("A ~p ~s", [{foo, bar, 1}, ["1"]])).

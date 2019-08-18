@@ -13,7 +13,8 @@
         , string/0, nil/0, map/1, maybe_improper_list/0
         , maybe_improper_list/2, nonempty_maybe_improper_list/0
         , nonempty_maybe_improper_list/2, nonempty_string/0
-        , iolist/0, iodata/0
+        , iolist/0, iodata/0, printable_latin1_list/0
+        , printable_unicode_list/0
         ]).
 
 %% Internal
@@ -264,6 +265,20 @@ reference() ->
 term() ->
   {?type_refl, #{ check => fun(_) -> true end
                 , name => "term()"
+                }}.
+
+%% @doc List of printable latin1 characters
+-spec printable_latin1_list() -> type().
+printable_latin1_list() ->
+  {?type_refl, #{ check => fun io_lib:printable_latin1_list/1
+                , name  => "printable_latin1_list()"
+                }}.
+
+%% @doc List of printable unicode characters
+-spec printable_unicode_list() -> type().
+printable_unicode_list() ->
+  {?type_refl, #{ check => fun io_lib:printable_unicode_list/1
+                , name  => "printable_unicode_list()"
                 }}.
 
 %% @doc Reflection of `tuple()' type
