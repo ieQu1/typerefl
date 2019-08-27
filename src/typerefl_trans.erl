@@ -195,11 +195,18 @@ do_refl_type(Self, State, {remote_type, Line, CallSpec}) ->
 do_refl_type_call(Parent, State, Line, {Function, Args}) ->
   do_refl_type_call(Parent, State, Line, {State#s.module, Function, Args});
 do_refl_type_call(Parent, State0, Line, {Module, Function, Args0}) ->
+  ?log("Reflecting type call: ~p", [{Module, Function, Args0}]),
   Local = Module =:= State0#s.module,
   State1 = if Local ->
                %% Another local type is refered here, it should be
                %% reflected too:
-               maybe_refl_type({Function, length(Args0)}, State0);
+               TypeArity = case Args0 of
+                             any ->
+                               0;
+                             L when is_list(L) ->
+                               length(Args0)
+                           end,
+               maybe_refl_type({Function, TypeArity}, State0);
               true ->
                State0
            end,
@@ -314,7 +321,9 @@ add_attributes(Forms0, Attributes0) ->
   Attributes = [{attribute, 0, K, V} || {K, V} <- Attributes0],
   Before ++ [Module|Attributes] ++ Rest.
 
--spec transform_type_args(local_tref(), integer(), #s{}, atom(), [ast()]) -> {ast(), #s{}}.
+-spec transform_type_args(local_tref(), integer(), #s{}, atom(), [ast()] | any) -> {ast(), #s{}}.
+transform_type_args(_, _, State, _, any) ->
+  {[], State};
 transform_type_args(Parent, Line, State0, Name, Args0) ->
   {Args1, State} = lists:mapfoldl( fun(I, S) -> do_refl_type(Parent, S, I) end
                                  , State0

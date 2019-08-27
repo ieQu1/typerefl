@@ -16,8 +16,8 @@
 
 -reflect_type([ mybool/0, myterm1/0, myterm2/0, my_int/0, my_byte/0
               , list_of_bools/0, non_empty_list_of_bools/0, mylist0/0, strings/0
-              , foo_atom/0, foobarbaz/0, mytuple/0, simple/1, stupid_list/1
-              , mymap/0, remote_types/0
+              , foo_atom/0, foobarbaz/0, mytuple/0, mytuple_any/0, mytuple_empty/0
+              , simple/1, stupid_list/1, mymap/0, remote_types/0
               ]).
 
 %% -----------------------------------------------------------------------------
@@ -81,8 +81,14 @@ union_refl_test() ->
 
 -type mytuple() :: {float(), float(), xxx}.
 
+-type mytuple_any() :: tuple().
+
+-type mytuple_empty() :: {}.
+
 tuple_refl_test() ->
-  ?typeEqual(tuple([float(), float(), xxx]), mytuple()).
+  ?typeEqual(tuple([float(), float(), xxx]), mytuple()),
+  ?typeEqual(tuple(), mytuple_any()),
+  ?typeEqual(tuple([]), mytuple_empty()).
 
 %% -----------------------------------------------------------------------------
 
