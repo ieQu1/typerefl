@@ -78,6 +78,12 @@
 alias(Name, Type) ->
   alias(Name, Type, [], []).
 
+%% @private Erase definition of the type (it can be useful for
+%% avoiding printing obvious stuff like definition of `char()')
+-spec nodef(type()) -> type().
+nodef({?type_refl, Map}) ->
+  {?type_refl, Map #{definition => []}}.
+
 %% @private Create an alias for a higher-kind type
 %%
 %% Example:
@@ -372,17 +378,17 @@ range(Min, Max) ->
 %% @doc Reflection of `char()' type
 -spec char() -> type().
 char() ->
-  alias("char", range(0, 16#10ffff)).
+  alias("char", nodef(range(0, 16#10ffff))).
 
 %% @doc Reflection of `arity()' type
 -spec arity() -> type().
 arity() ->
-  alias("arity", range(0, 255)).
+  alias("arity", nodef(range(0, 255))).
 
 %% @doc Reflection of `byte()' type
 -spec byte() -> type().
 byte() ->
-  alias("byte", range(0, 255)).
+  alias("byte", nodef(range(0, 255))).
 
 %% @doc Reflection of `module()' type
 -spec module() -> type().
@@ -392,7 +398,7 @@ module() ->
 %% @doc Reflection of `non_neg_integer()' type
 -spec non_neg_integer() -> type().
 non_neg_integer() ->
-  alias("non_neg_integer", range(0, inf)).
+  alias("non_neg_integer", nodef(range(0, inf))).
 
 %% @doc Reflection of `node()' type
 -spec node() -> type().
@@ -402,13 +408,13 @@ node() ->
 %% @doc Reflection of `string()' type
 -spec string() -> type().
 string() ->
-  {?type_refl, R0} = alias("string", list(char())),
+  {?type_refl, R0} = alias("string", nodef(list(char()))),
   {?type_refl, R0 #{from_string => fun id/1}}.
 
 %% @doc Reflection of `nonempty_string()' type
 -spec nonempty_string() -> type().
 nonempty_string() ->
-  {?type_refl, R0} = alias("nonempty_string", nonempty_list(char())),
+  {?type_refl, R0} = alias("nonempty_string", nodef(nonempty_list(char()))),
   {?type_refl, R0 #{from_string => fun id/1}}.
 
 %% @doc Reflection of `nil()' type
