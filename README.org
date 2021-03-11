@@ -51,7 +51,7 @@ Maps:
                 , integer() => list()
                 }.
 
--reflect_type([foo/1]).
+-reflect_type([foo/0]).
 
 main() ->
   ok = typerefl:typecheck(foo(), #{foo => 1, bar => foo, 1 => []}).
