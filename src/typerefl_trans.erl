@@ -3,7 +3,7 @@
 
 -include("typerefl_int.hrl").
 
--define(debug, true).
+%-define(debug, true).
 
 -ifdef(debug).
 -define(log(A, B), io:format(user, A "~n", B)).
@@ -372,11 +372,11 @@ mk_literal_list(Line, List) ->
   mk_literal_list(Line, fun(A) -> A end, List).
 
 make_additional_attrs_ast(Name, Line, State) ->
-  ?map(maybe_add_custom_verify(Name, Line, check, State#s.custom_verif) ++
-         maybe_add_custom_verify(Name, Line, pretty_print, State#s.custom_pretty_print) ++
-         maybe_add_custom_verify(Name, Line, from_string, State#s.custom_from_string)).
+  ?map(maybe_add_custom_attr(Name, Line, check, State#s.custom_verif) ++
+         maybe_add_custom_attr(Name, Line, pretty_print, State#s.custom_pretty_print) ++
+         maybe_add_custom_attr(Name, Line, from_string, State#s.custom_from_string)).
 
-maybe_add_custom_verify(Name, Line, Key, Map) ->
+maybe_add_custom_attr(Name, Line, Key, Map) ->
   case Map of
     #{Name := {Module, Function}} ->
       [?ass(?atom(Key), ?rfun_ref(Module, Function, 1))];
