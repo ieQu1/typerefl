@@ -4,8 +4,6 @@
 -include_lib("typerefl/include/types.hrl").
 -include_lib("typerefl/src/typerefl_int.hrl").
 
--export([parse_ip_address/1]).
-
 -typerefl_ignore([ignored/0]).
 
 -define(add_module(Str), atom_to_list(?MODULE) ++ ":" ++ Str).
@@ -22,7 +20,7 @@
               ]).
 
 -typerefl_verify({uri/0, ?MODULE, verify_uri}).
--typerefl_from_string({ipv4_address/0, ?MODULE, parse_ip_address}).
+-typerefl_from_string({ipv4_address/0, inet, parse_ipv4_address}).
 -typerefl_pretty_print({ipv4_address/0, inet, ntoa}).
 
 %% -----------------------------------------------------------------------------
@@ -156,13 +154,10 @@ verify_test() ->
 
 -type ipv4_address() :: {byte(), byte(), byte(), byte()}.
 
-parse_ip_address(Str) ->
-  {ok, Addr} = inet:parse_ipv4_address(Str),
-  Addr.
-
 ip_address_test() ->
-  {?type_refl, #{from_string := FromString}} = ipv4_address(),
-  ?assertEqual(fun ?MODULE:parse_ip_address/1, FromString),
+  {?type_refl, #{from_string := FromString, pretty_print := PrettyPrint}} = ipv4_address(),
+  ?assertEqual(fun inet:parse_ipv4_address/1, FromString),
+  ?assertEqual(fun inet:ntoa/1, PrettyPrint),
 
   ?assertMatch({ok, {127, 0, 0, 1}}, typerefl:from_string(ipv4_address(), "127.0.0.1")).
 

@@ -142,6 +142,7 @@ print(Type) ->
                    , [name(Type), string:join(Defn, ",\n  ")])
   end.
 
+
 %% @doc Try to parse a string or a list of strings in a smart way:
 %% convert the string to atom when `Type' is `atom()', leave input as
 %% is when `Type' is `string()' and try to parse the string as erlang
@@ -152,14 +153,39 @@ print(Type) ->
 %% element of the list.
 %%
 %% Note: It does NOT check type of the resulting term
--spec from_string(type(), string() | [string()]) ->
-                     {ok, term()} | {error, string()}.
-from_string(Type, String) ->
-  try from_string_(Type, String) of
-      Val -> {ok, Val}
+-spec from_string(type(), string() | [string()]) -> term().
+from_string(Type, []) ->
+  %% This is quite sketchy, but _the only_ valid values parsable from
+  %% an empty string are `[]' and atom ''. It's typechecker's job to
+  %% prove this assumption wrong.
+  case Type of
+    {?type_refl, #{from_string := Fun}} ->
+      Fun([]);
+    '' -> {ok, ''};
+    _  -> {ok, []}
+  end;
+from_string(Type, Strings = [Hd|_]) when is_list(Hd) ->
+  {?type_refl, #{args := [T]}} = Type,
+  try [from_string_(T, I) || I <- Strings] of
+    L -> {ok, L}
   catch
-    Err -> Err
-  end.
+    _:_ -> {error, "Unable to parse strings"}
+  end;
+from_string({?type_refl, Type}, Str) ->
+  Fun = maps:get( from_string
+                , Type
+                , fun string_to_term/1
+                ),
+  Fun(Str);
+from_string(Atom, Str) when is_atom(Atom) -> %% Why would anyone want to parse a known atom? Weird, but ok
+  case atom_to_list(Atom) of
+    Str ->
+      {ok, Atom};
+    Expected ->
+      {error, "Expected: " ++ Expected ++ ", got:" ++ Str}
+  end;
+from_string(Type0, Str) ->
+  from_string(desugar(Type0), Str).
 
 %% @doc Version of `from_string/2' that throws an exception instead of
 %% returning error-tuple
@@ -167,35 +193,13 @@ from_string(Type, String) ->
 %% @throws {error, string()}
 %%
 %% @see from_string/2
--spec from_string_(type(), string() | [string()]) -> term().
-from_string_(Type, []) ->
-  %% This is quite sketchy, but _the only_ valid values parsable from
-  %% an empty string are `[]' and atom ''. It's typechecker's job to
-  %% prove this assumption wrong.
-  case Type of
-    {?type_refl, #{from_string := Fun}} ->
-      Fun([]);
-    '' -> '';
-    _  -> []
-  end;
-from_string_(Type, Strings = [Hd|_]) when is_list(Hd) ->
-  {?type_refl, #{args := [T]}} = Type,
-  [from_string_(T, I) || I <- Strings];
-from_string_({?type_refl, Type}, Str) ->
-  Fun = maps:get( from_string
-                , Type
-                , fun string_to_term/1
-                ),
-  Fun(Str);
-from_string_(Type, Str) when is_atom(Type) -> %% Why would anyone want to parse a known atom? Weird, but ok
-  case atom_to_list(Type) of
-    Str ->
-      Type;
-    Expected ->
-      throw({error, "Expected: " ++ Expected ++ ", got:" ++ Str})
-  end;
-from_string_(Type0, Str) ->
-  from_string_(desugar(Type0), Str).
+-spec from_string_(type(), string() | [string()]) ->
+                     {ok, term()} | {error, string()}.
+from_string_(Type, String) ->
+  case from_string(Type, String) of
+    {ok, Val} -> Val;
+    Err -> throw(Err)
+  end.
 
 %%====================================================================
 %% Type reflections
@@ -209,7 +213,7 @@ any() ->
 %% @doc Reflection of `atom()' type
 -spec atom() -> type().
 atom() ->
-  ?prim(atom, is_atom, #{from_string => fun list_to_atom/1}).
+  ?prim(atom, is_atom, #{from_string => fun atom_from_string/1}).
 
 %% @doc Reflection of `binary()' type
 -spec binary() -> type().
@@ -409,13 +413,13 @@ node() ->
 -spec string() -> type().
 string() ->
   {?type_refl, R0} = alias("string", nodef(list(char()))),
-  {?type_refl, R0 #{from_string => fun id/1}}.
+  {?type_refl, R0 #{from_string => fun wrap_ok/1}}.
 
 %% @doc Reflection of `nonempty_string()' type
 -spec nonempty_string() -> type().
 nonempty_string() ->
   {?type_refl, R0} = alias("nonempty_string", nodef(nonempty_list(char()))),
-  {?type_refl, R0 #{from_string => fun id/1}}.
+  {?type_refl, R0 #{from_string => fun wrap_ok/1}}.
 
 %% @doc Reflection of `nil()' type
 -spec nil() -> type().
@@ -660,24 +664,20 @@ make_lazy(Name, Fun, Args) ->
             }.
 
 %% @private Parse string as an Erlang term
--spec string_to_term(string()) -> term().
+-spec string_to_term(string()) -> {ok, term()} | {error, _}.
 string_to_term(String) ->
   case erl_scan:string(String) of
     {ok, Tok0, _} ->
       Tok = Tok0 ++ [{dot, 1}],
       case erl_parse:parse_term(Tok) of
         {ok, Term} ->
-          Term;
+          {ok, Term};
         {error, {_, _, _Err}} ->
-          throw({error, "Unable to parse Erlang term"})
+          {error, "Unable to parse Erlang term"}
       end;
     _ ->
-      throw({error, "Unable to tokenize Erlang term"})
+      {error, "Unable to tokenize Erlang term"}
   end.
-
--spec id(A) -> A.
-id(A) ->
-  A.
 
 -spec re_match(string() | binary(), re:mp()) -> boolean().
 re_match(Str, RE)  ->
@@ -687,3 +687,9 @@ re_match(Str, RE)  ->
   catch
     error:badarg -> false
   end.
+
+wrap_ok(A) ->
+  {ok, A}.
+
+atom_from_string(Str) ->
+  {ok, list_to_atom(Str)}.
