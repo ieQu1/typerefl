@@ -165,3 +165,25 @@ higher_kind_test() ->
   ?invalid(T1, {cons, foo, {cons, bar, foo}}),
   ?invalid(T1, {cons, foo, {cons, 1, nil}}),
   ok.
+
+
+re_string_test() ->
+  ?valid(typerefl:regexp_string(""), "foo"),
+  ?valid(typerefl:regexp_string("fo+"), "foo"),
+  ?valid(typerefl:regexp_string("^(foo|bar)+$"), "foofoobarbar"),
+
+  ?invalid(typerefl:regexp_string(""), bar),
+  ?invalid(typerefl:regexp_string(""), 1),
+  ?invalid(typerefl:regexp_string(""), [30, 30, foo]),
+  ?invalid(typerefl:regexp_string("^foo$"), "fooo"),
+  ?invalid(typerefl:regexp_string("^foo$"), <<"foo">>).
+
+re_binary_test() ->
+  ?valid(typerefl:regexp_binary(""), <<"foo">>),
+  ?valid(typerefl:regexp_binary("fo+"), <<"foo">>),
+  ?valid(typerefl:regexp_binary("^(foo|bar)+$"), <<"foofoobarbar">>),
+
+  ?invalid(typerefl:regexp_binary(""), bar),
+  ?invalid(typerefl:regexp_binary(""), 1),
+  ?invalid(typerefl:regexp_binary("foo"), <<"bar">>),
+  ?invalid(typerefl:regexp_binary("^foo$"), "foo").
