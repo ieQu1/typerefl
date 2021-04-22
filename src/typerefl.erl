@@ -15,6 +15,8 @@
         , nonempty_maybe_improper_list/2, nonempty_string/0
         , iolist/0, iodata/0, printable_latin1_list/0
         , printable_unicode_list/0
+          %% Complex and nonstandard types
+        , regexp_string/1, regexp_binary/1
         ]).
 
 %% Internal
@@ -452,6 +454,28 @@ iolist() ->
 iodata() ->
   union(iolist(), binary()).
 
+%% @doc Type of UTF8 strings that match a regexp
+-spec regexp_string(_Regexp :: string() | binary()) -> type().
+regexp_string(Regexp) ->
+  {ok, RE} = re:compile(Regexp, [unicode]),
+  Name = io_lib:format("string(~p)", [Regexp]),
+  {?type_refl, #{ check => fun(Term) ->
+                               is_list(Term) andalso re_match(Term, RE)
+                           end
+                , name => Name
+                }}.
+
+%% @doc Type of UTF8 binaries that match a regexp
+-spec regexp_binary(_Regexp :: string() | binary()) -> type().
+regexp_binary(Regexp) ->
+  {ok, RE} = re:compile(Regexp, [unicode]),
+  Name = io_lib:format("binary(~p)", [Regexp]),
+  {?type_refl, #{ check => fun(Term) ->
+                               is_binary(Term) andalso re_match(Term, RE)
+                           end
+                , name => Name
+                }}.
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -656,3 +680,12 @@ string_to_term(String) ->
 -spec id(A) -> A.
 id(A) ->
   A.
+
+-spec re_match(string() | binary(), re:mp()) -> boolean().
+re_match(Str, RE)  ->
+  try re:run(Str, RE, [{capture, none}]) of
+    match   -> true;
+    nomatch -> false
+  catch
+    error:badarg -> false
+  end.
