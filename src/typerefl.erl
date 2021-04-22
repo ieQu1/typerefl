@@ -465,12 +465,11 @@ regexp_string(Regexp) ->
                 , name => Name
                 }}.
 
-
 %% @doc Type of UTF8 binaries that match a regexp
 -spec regexp_binary(_Regexp :: string() | binary()) -> type().
 regexp_binary(Regexp) ->
   {ok, RE} = re:compile(Regexp, [unicode]),
-  Name = io_lib:format("string(~p)", [Regexp]),
+  Name = io_lib:format("binary(~p)", [Regexp]),
   {?type_refl, #{ check => fun(Term) ->
                                is_binary(Term) andalso re_match(Term, RE)
                            end
