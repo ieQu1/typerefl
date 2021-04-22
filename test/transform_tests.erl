@@ -4,6 +4,8 @@
 -include_lib("typerefl/include/types.hrl").
 -include_lib("typerefl/src/typerefl_int.hrl").
 
+-export([parse_ip_address/1]).
+
 -typerefl_ignore([ignored/0]).
 
 -define(add_module(Str), atom_to_list(?MODULE) ++ ":" ++ Str).
@@ -16,9 +18,10 @@
               , list_of_bools/0, non_empty_list_of_bools/0, mylist0/0, strings/0
               , foo_atom/0, foobarbaz/0, mytuple/0, mytuple_any/0, mytuple_empty/0
               , simple/1, stupid_list/1, mymap/0, remote_types/0, ipv4_address/0
+              , uri/0
               ]).
 
--typerefl_verify({url/0, ?MODULE, verify_uri}).
+-typerefl_verify({uri/0, ?MODULE, verify_uri}).
 -typerefl_from_string({ipv4_address/0, ?MODULE, parse_ip_address}).
 -typerefl_pretty_print({ipv4_address/0, inet, ntoa}).
 
@@ -145,16 +148,23 @@ remote_type_refl_test() ->
 verify_uri(Str) ->
   is_map(uri_string:parse(Str)).
 
+verify_test() ->
+  {?type_refl, #{check := Check}} = uri(),
+  ?assertEqual(fun ?MODULE:verify_uri/1, Check).
 
 %% -----------------------------------------------------------------------------
 
 -type ipv4_address() :: {byte(), byte(), byte(), byte()}.
 
 parse_ip_address(Str) ->
-  case inet:parse_ipv4_address(Str) of
-    {ok, Addr} -> Addr;
-    {error, _} -> throw("Invalid IP address")
-  end.
+  {ok, Addr} = inet:parse_ipv4_address(Str),
+  Addr.
+
+ip_address_test() ->
+  {?type_refl, #{from_string := FromString}} = ipv4_address(),
+  ?assertEqual(fun ?MODULE:parse_ip_address/1, FromString),
+
+  ?assertMatch({ok, {127, 0, 0, 1}}, typerefl:from_string(ipv4_address(), "127.0.0.1")).
 
 %% -----------------------------------------------------------------------------
 

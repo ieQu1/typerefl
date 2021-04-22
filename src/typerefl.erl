@@ -78,7 +78,7 @@
 %% @equiv alias(Name, Type, [], [])
 -spec alias(string(), type()) -> type().
 alias(Name, Type) ->
-  alias(Name, Type, [], []).
+  alias(Name, Type, #{}, []).
 
 %% @private Erase definition of the type (it can be useful for
 %% avoiding printing obvious stuff like definition of `char()')
@@ -94,13 +94,11 @@ nodef({?type_refl, Map}) ->
 %% '''
 %%
 %% @param Name0 Name of the new type
-%% @param TypeVars0 Symbolic names of type variables
 %% @param Args Values of type variables
--spec alias(string(), type(), [atom()], [type()]) -> type().
-alias(Name0, Type, TypeVars0, Args) ->
-  %% TODO: Args? Why is it applied?
-  TypeVars = [?type_var(I) || I <- TypeVars0],
-  {?type_refl, Map} = Type,
+-spec alias(string(), type(), map(), [type()]) -> type().
+alias(Name0, Type, AdditionalAttrs, Args) ->
+  {?type_refl, Map0} = Type,
+  Map = maps:merge(Map0, AdditionalAttrs),
   Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
   OldName = maps:get(name, Map),
   OldDefn = maps:get(definition, Map, []),
@@ -189,7 +187,7 @@ from_string_({?type_refl, Type}, Str) ->
                 , fun string_to_term/1
                 ),
   Fun(Str);
-from_string_(Type, Str) when is_atom(Type) -> %% Weird, but ok
+from_string_(Type, Str) when is_atom(Type) -> %% Why would anyone want to parse a known atom? Weird, but ok
   case atom_to_list(Type) of
     Str ->
       Type;
@@ -499,7 +497,7 @@ defn(#lazy_type{name = Name}) ->
   Name;
 defn(?type_var(_)) ->
   [];
-defn(Type = {?type_refl, Map}) ->
+defn({?type_refl, Map}) ->
   maps:get(definition, Map, []);
 defn(A) when is_atom(A) ->
   [];
@@ -670,7 +668,7 @@ string_to_term(String) ->
       case erl_parse:parse_term(Tok) of
         {ok, Term} ->
           Term;
-        {error, {_, _, Err}} ->
+        {error, {_, _, _Err}} ->
           throw({error, "Unable to parse Erlang term"})
       end;
     _ ->
