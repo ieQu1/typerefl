@@ -3,7 +3,7 @@
 
 -include("typerefl_int.hrl").
 
-%-define(debug, true).
+-define(debug, true).
 
 -ifdef(debug).
 -define(log(A, B), io:format(user, A "~n", B)).
@@ -29,10 +29,12 @@
 -type reflected_type() :: #typedef{}.
 
 -record(s,
-        { module          :: atom()
-        , local_types     :: #{local_tref() => typedef()}
-        , reflected_types :: #{local_tref() => reflected_type()}
-        , custom_verif    :: #{local_tref() => ast()}
+        { module                    :: atom()
+        , local_types         = #{} :: #{local_tref() => typedef()}
+        , reflected_types     = #{} :: #{local_tref() => reflected_type()}
+        , custom_verif        = #{} :: #{local_tref() => ast()}
+        , custom_from_string  = #{} :: #{local_tref() => ast()}
+        , custom_pretty_print = #{} :: #{local_tref() => ast()}
         }).
 
 -define(typerefl_module, typerefl).
@@ -105,19 +107,17 @@
 parse_transform(Forms0, _Options) ->
   %% Collect module attributes:
   Ignored = ignored(Forms0),
-  CustomVerif = custom_verify(Forms0),
   Typedefs0 = find_local_typedefs(Forms0),
   Typedefs = maps:without(Ignored, Typedefs0),
   TypesToReflect = types_to_reflect(Forms0),
   ?log("Types to reflect: ~p", [TypesToReflect]),
   Module = hd([M || {attribute, _, module, M} <- Forms0]),
-  State0 = #s{ local_types = Typedefs
-             , custom_verif = CustomVerif
-             , reflected_types = #{}
-             , module = Module
+  State0 = #s{ module      = Module
+             , local_types = Typedefs
              },
+  State1 = scan_custom_attributes(State0, Forms0),
   %% Perform type reflection:
-  State = lists:foldl(fun refl_type/2, State0, TypesToReflect),
+  State = lists:foldl(fun refl_type/2, State1, TypesToReflect),
   %% export_type and export definitions are the same.
   Exports = TypesToReflect,
   Forms1 = add_attributes(Forms0, [ {export, Exports}
@@ -151,11 +151,11 @@ refl_type(TRef, State0) ->
 %% Traverse AST of a type definition and produce a reflection
 -spec do_refl_type(local_tref(), #s{}, ast()) -> {ast(), #s{}}.
 do_refl_type(_, State, AST = {var, _Line, _Var}) ->
-    {AST, State};
+  {AST, State};
 do_refl_type(_, State, AST = ?INT(_)) ->
-    {AST, State};
+  {AST, State};
 do_refl_type(_, State, AST = ?ATOM(_)) ->
-    {AST, State};
+  {AST, State};
 do_refl_type(_, State, {type, Line, map, any}) -> %% Maps are special
   {?rcall(?typerefl_module, map, []), State};
 do_refl_type(Self, State0, {type, Line, map, Args}) -> %% Maps are special
@@ -186,7 +186,7 @@ do_refl_type(Self, State0, {type, Line, map, Args}) -> %% Maps are special
   %% Create `typerefl:map/1' call and return:
   {?rcall(?typerefl_module, map, [ArgAST]), State};
 do_refl_type(Self, State, {Qualifier, Line, Name, Args})
-  when Qualifier =:= type; Qualifier =:= user_type ->
+       when Qualifier =:= type; Qualifier =:= user_type ->
   do_refl_type_call(Self, State, Line, {Name, Args});
 do_refl_type(Self, State, {remote_type, Line, CallSpec}) ->
   [?ATOM(Module), ?ATOM(Name), Args] = CallSpec,
@@ -230,9 +230,26 @@ ignored(Forms) ->
   DeepDefs = [Defs || {attribute, _, typerefl_ignore, Defs} <- Forms],
   lists:usort(lists:append(DeepDefs)).
 
-custom_verify(Forms) ->
-  Defs = [Def || {attribute, _, typerefl_verify, Def} <- Forms],
-  maps:from_list(Defs).
+scan_custom_attributes(State, []) ->
+  State;
+scan_custom_attributes(State0, [{attribute, _, Attrubute, {Type, Def}}|Forms]) ->
+  #s{ custom_verif = CustomVerif
+    , custom_from_string = CustomFromString
+    , custom_pretty_print = CustomPrettyPrint
+    } = State0,
+  State = case Attrubute of
+            typerefl_verify ->
+              State0#s{custom_verif = CustomVerif #{Type => Def}};
+            typerefl_from_string ->
+              State0#s{custom_from_string = CustomFromString #{Type => Def}};
+            typerefl_pretty_print ->
+              State0#s{custom_from_string = CustomPrettyPrint #{Type => Def}};
+            _ ->
+              State0
+          end,
+  scan_custom_attributes(State, Forms);
+scan_custom_attributes(State, [_|Forms]) ->
+  scan_custom_attributes(State, Forms).
 
 %% Collect all type definitions in the module
 -spec find_local_typedefs(ast()) -> #{local_tref() => #typedef{}}.
