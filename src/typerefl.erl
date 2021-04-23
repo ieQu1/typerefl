@@ -17,6 +17,7 @@
         , printable_unicode_list/0
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
+        , ip4_address/0, ip6_address/0, ip_address/0
         ]).
 
 %% Internal
@@ -477,6 +478,35 @@ regexp_binary(Regexp) ->
                            end
                 , name => Name
                 }}.
+
+%% @doc Type of IPv6 addresses
+-spec ip4_address() -> type().
+ip4_address() ->
+  Range = range(0, 255),
+  BaseType = tuple([Range, Range, Range, Range]),
+  AdditionalAttrs = #{ from_string  => fun inet:parse_ipv4_address/1
+                     , pretty_print => fun inet:ntoa/1
+                     },
+  alias("ip4_address()", BaseType, AdditionalAttrs, []).
+
+%% @doc Type of IPv6 addresses
+-spec ip6_address() -> type().
+ip6_address() ->
+  Range = range(0, 65535),
+  BaseType = tuple([Range, Range, Range, Range, Range, Range, Range, Range]),
+  AdditionalAttrs = #{ from_string  => fun inet:parse_ipv6_address/1
+                     , pretty_print => fun inet:ntoa/1
+                     },
+  alias("ip6_address()", BaseType, AdditionalAttrs, []).
+
+%% @doc Type of IPv4 or IPv6 addresses
+-spec ip_address() -> type().
+ip_address() ->
+  BaseType = union([ip4_address(), ip6_address()]),
+  AdditionalAttrs = #{ from_string  => fun inet:parse_address/1
+                     , pretty_print => fun inet:ntoa/1
+                     },
+  alias("ip_address()", BaseType, AdditionalAttrs, []).
 
 %%====================================================================
 %% Internal functions
