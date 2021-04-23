@@ -29,10 +29,12 @@
 -type reflected_type() :: #typedef{}.
 
 -record(s,
-        { module          :: atom()
-        , local_types     :: #{local_tref() => typedef()}
-        , reflected_types :: #{local_tref() => reflected_type()}
-        , custom_verif    :: #{local_tref() => ast()}
+        { module                    :: atom()
+        , local_types         = #{} :: #{local_tref() => typedef()}
+        , reflected_types     = #{} :: #{local_tref() => reflected_type()}
+        , custom_verif        = #{} :: #{local_tref() => ast()}
+        , custom_from_string  = #{} :: #{local_tref() => ast()}
+        , custom_pretty_print = #{} :: #{local_tref() => ast()}
         }).
 
 -define(typerefl_module, typerefl).
@@ -102,29 +104,32 @@
          {clauses, [{clause, Line, Args, [], Body}
                    ]}}).
 
+-define(rfun_ref(MODULE, NAME, ARITY),
+        {'fun', Line,
+         {function, ?atom(MODULE), ?atom(NAME), {integer, Line, ARITY}}}).
+
 parse_transform(Forms0, _Options) ->
+  %%?log("Dump of the module AST: ~p", [Forms0]),
   %% Collect module attributes:
   Ignored = ignored(Forms0),
-  CustomVerif = custom_verify(Forms0),
   Typedefs0 = find_local_typedefs(Forms0),
   Typedefs = maps:without(Ignored, Typedefs0),
   TypesToReflect = types_to_reflect(Forms0),
   ?log("Types to reflect: ~p", [TypesToReflect]),
   Module = hd([M || {attribute, _, module, M} <- Forms0]),
-  State0 = #s{ local_types = Typedefs
-             , custom_verif = CustomVerif
-             , reflected_types = #{}
-             , module = Module
+  State0 = #s{ module      = Module
+             , local_types = Typedefs
              },
+  State1 = scan_custom_attributes(State0, Forms0),
   %% Perform type reflection:
-  State = lists:foldl(fun refl_type/2, State0, TypesToReflect),
+  State = lists:foldl(fun refl_type/2, State1, TypesToReflect),
   %% export_type and export definitions are the same.
   Exports = TypesToReflect,
   Forms1 = add_attributes(Forms0, [ {export, Exports}
                                   , {export_type, Exports}
                                   ]),
   ReifiedTypes = maps:map(fun(_, V) ->
-                              make_reflection_function(Module, V)
+                              make_reflection_function(Module, State, V)
                           end,
                           State#s.reflected_types),
   ?log("Reified types:~n~p", [ReifiedTypes]),
@@ -151,11 +156,11 @@ refl_type(TRef, State0) ->
 %% Traverse AST of a type definition and produce a reflection
 -spec do_refl_type(local_tref(), #s{}, ast()) -> {ast(), #s{}}.
 do_refl_type(_, State, AST = {var, _Line, _Var}) ->
-    {AST, State};
+  {AST, State};
 do_refl_type(_, State, AST = ?INT(_)) ->
-    {AST, State};
+  {AST, State};
 do_refl_type(_, State, AST = ?ATOM(_)) ->
-    {AST, State};
+  {AST, State};
 do_refl_type(_, State, {type, Line, map, any}) -> %% Maps are special
   {?rcall(?typerefl_module, map, []), State};
 do_refl_type(Self, State0, {type, Line, map, Args}) -> %% Maps are special
@@ -186,7 +191,7 @@ do_refl_type(Self, State0, {type, Line, map, Args}) -> %% Maps are special
   %% Create `typerefl:map/1' call and return:
   {?rcall(?typerefl_module, map, [ArgAST]), State};
 do_refl_type(Self, State, {Qualifier, Line, Name, Args})
-  when Qualifier =:= type; Qualifier =:= user_type ->
+       when Qualifier =:= type; Qualifier =:= user_type ->
   do_refl_type_call(Self, State, Line, {Name, Args});
 do_refl_type(Self, State, {remote_type, Line, CallSpec}) ->
   [?ATOM(Module), ?ATOM(Name), Args] = CallSpec,
@@ -230,9 +235,26 @@ ignored(Forms) ->
   DeepDefs = [Defs || {attribute, _, typerefl_ignore, Defs} <- Forms],
   lists:usort(lists:append(DeepDefs)).
 
-custom_verify(Forms) ->
-  Defs = [Def || {attribute, _, typerefl_verify, Def} <- Forms],
-  maps:from_list(Defs).
+scan_custom_attributes(State, []) ->
+  State;
+scan_custom_attributes(State0, [{attribute, _, Attrubute, {Type, Module, Function}}|Forms]) ->
+  #s{ custom_verif = CustomVerif
+    , custom_from_string = CustomFromString
+    , custom_pretty_print = CustomPrettyPrint
+    } = State0,
+  State = case Attrubute of
+            typerefl_verify ->
+              State0#s{custom_verif = CustomVerif #{Type => {Module, Function}}};
+            typerefl_from_string ->
+              State0#s{custom_from_string = CustomFromString #{Type => {Module, Function}}};
+            typerefl_pretty_print ->
+              State0#s{custom_pretty_print = CustomPrettyPrint #{Type => {Module, Function}}};
+            _ ->
+              State0
+          end,
+  scan_custom_attributes(State, Forms);
+scan_custom_attributes(State, [_|Forms]) ->
+  scan_custom_attributes(State, Forms).
 
 %% Collect all type definitions in the module
 -spec find_local_typedefs(ast()) -> #{local_tref() => #typedef{}}.
@@ -281,8 +303,9 @@ maybe_refl_type( TRef
 
 %% Make a function defenition that is a reflection of the type in the
 %% term universe
--spec make_reflection_function(module(), reflected_type()) -> ast().
+-spec make_reflection_function(module(), #s{}, reflected_type()) -> ast().
 make_reflection_function( Module
+                        , State
                         , #typedef{ body = AST
                                   , params = Vars0
                                   , name = Name
@@ -290,7 +313,6 @@ make_reflection_function( Module
                                   }) ->
   Arity = length(Vars0),
   Vars = [{var, Line, Var} || Var <- Vars0],
-  SymbolicVars = mk_literal_list(Line, [?atom(I) || I <- Vars0]),
   NameStr = io_lib:format("~p:~p", [Module, Name]),
   NameAST = {string, Line, lists:flatten(NameStr)},
   SelfAST = {'fun', Line, {function, Name, Arity}},
@@ -299,6 +321,7 @@ make_reflection_function( Module
                        , SelfAST
                        , ?type_vars_var
                        ]),
+  AdditionalAttrsAST = make_additional_attrs_ast({Name, Arity}, Line, State),
   {function, Line, Name, Arity,
    [{clause, Line, Vars, []
     , [ {match, Line, ?type_vars_var, mk_literal_list(Line, Vars)}
@@ -306,7 +329,7 @@ make_reflection_function( Module
       , ?rcall(?typerefl_module, alias,
                [ NameAST
                , AST
-               , SymbolicVars
+               , AdditionalAttrsAST
                , ?type_vars_var
                ])
       ]}
@@ -347,3 +370,16 @@ mk_literal_list(Line, Fun, [Val|Tail]) ->
 
 mk_literal_list(Line, List) ->
   mk_literal_list(Line, fun(A) -> A end, List).
+
+make_additional_attrs_ast(Name, Line, State) ->
+  ?map(maybe_add_custom_attr(Name, Line, check, State#s.custom_verif) ++
+         maybe_add_custom_attr(Name, Line, pretty_print, State#s.custom_pretty_print) ++
+         maybe_add_custom_attr(Name, Line, from_string, State#s.custom_from_string)).
+
+maybe_add_custom_attr(Name, Line, Key, Map) ->
+  case Map of
+    #{Name := {Module, Function}} ->
+      [?ass(?atom(Key), ?rfun_ref(Module, Function, 1))];
+    _ ->
+      []
+  end.
