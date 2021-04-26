@@ -3,7 +3,7 @@
 -include("typerefl_int.hrl").
 
 %% API
--export([typecheck/2, print/1, from_string/2, from_string_/2]).
+-export([typecheck/2, print/1, pretty_print_value/2, from_string/2, from_string_/2]).
 
 %% Type reflections (Copy verbatim to types.hrl)
 -export([ any/0, atom/0, binary/0, boolean/0, float/0, function/0
@@ -21,7 +21,7 @@
         ]).
 
 %% Internal
--export([fix_t/4, make_lazy/3, alias/2, alias/4]).
+-export([make_lazy/3, alias/2, alias/4]).
 
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
@@ -200,6 +200,16 @@ from_string_(Type, String) ->
   case from_string(Type, String) of
     {ok, Val} -> Val;
     Err -> throw(Err)
+  end.
+
+%% @doc Pretty-print value of type
+-spec pretty_print_value(type(), term()) -> iolist().
+pretty_print_value({?type_refl, Args}, Term) ->
+  case Args of
+    #{pretty_print := Fun} ->
+      Fun(Term);
+    _ ->
+      io_lib:format("~p", [Term])
   end.
 
 %%====================================================================
@@ -678,13 +688,6 @@ desugar([]) ->
   nil();
 desugar(T) when is_map(T) ->
   map([{fuzzy, K, V} || {K, V} <- maps:to_list(T)]).
-
-%% @private Bastardized fixed-point combinator-ish function that we
-%% use to implement lazy recursion
--spec fix_t(typename(), fun(), fun((#lazy_type{}) -> type()), [term()]) -> type().
-fix_t(Name, F, G, Args) ->
-  H = make_lazy(Name, F, Args),
-  G(H).
 
 %% @private Make a thunk
 -spec make_lazy(iolist(), fun(), [term()]) -> type().
