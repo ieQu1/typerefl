@@ -21,7 +21,7 @@
         ]).
 
 %% Internal
--export([fix_t/4, make_lazy/3, alias/2, alias/4]).
+-export([make_lazy/3, alias/2, alias/4]).
 
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
@@ -688,13 +688,6 @@ desugar([]) ->
   nil();
 desugar(T) when is_map(T) ->
   map([{fuzzy, K, V} || {K, V} <- maps:to_list(T)]).
-
-%% @private Bastardized fixed-point combinator-ish function that we
-%% use to implement lazy recursion
--spec fix_t(typename(), fun(), fun((#lazy_type{}) -> type()), [term()]) -> type().
-fix_t(Name, F, G, Args) ->
-  H = make_lazy(Name, F, Args),
-  G(H).
 
 %% @private Make a thunk
 -spec make_lazy(iolist(), fun(), [term()]) -> type().
