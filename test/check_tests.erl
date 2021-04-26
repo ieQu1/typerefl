@@ -187,3 +187,41 @@ re_binary_test() ->
   ?invalid(typerefl:regexp_binary(""), 1),
   ?invalid(typerefl:regexp_binary("foo"), <<"bar">>),
   ?invalid(typerefl:regexp_binary("^foo$"), "foo").
+
+ip4_address_test() ->
+  Type = typerefl:ip4_address(),
+  ?assertMatch({ok, {127, 0, 0, 1}}, typerefl:from_string(Type, "127.0.0.1")),
+  ?assertMatch({error, _}, typerefl:from_string(Type, ".0.0.1")),
+  ?valid(Type, {255, 255, 255, 255}),
+  ?valid(Type, {0, 0, 0, 0}),
+  ?invalid(Type, {256, 256, 256, 256}),
+  ?invalid(Type, {100, -1, 0, 0}),
+  ?invalid(Type, {0, 0, 0}),
+  ?invalid(Type, foo).
+
+ip6_address_test() ->
+  Type = typerefl:ip6_address(),
+  ?assertMatch({ok, {0, 0, 0, 0, 0, 0, 0, 0}}, typerefl:from_string(Type, "::")),
+  ?assertMatch({error, _}, typerefl:from_string(Type, ":a")),
+  ?valid(Type, {0, 0, 0, 0, 0, 0, 0, 0}),
+  ?valid(Type, {65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535}),
+  ?invalid(Type, {0, 0, 0, 0}),
+  ?invalid(Type, {0, 0, 0, 0, 0, 0, -1, 0}),
+  ?invalid(Type, {65535, 65535, 65535, 65535, 65535, 65535, 65535, 65536}),
+  ?invalid(Type, foo).
+
+
+ip_address_test() ->
+  Type = typerefl:ip_address(),
+  ?assertMatch({ok, {127, 0, 0, 1}}, typerefl:from_string(Type, "127.0.0.1")),
+  ?assertMatch({ok, {0, 0, 0, 0, 0, 0, 0, 0}}, typerefl:from_string(Type, "::")),
+  ?assertMatch({error, _}, typerefl:from_string(Type, ".0.0.1")),
+  ?valid(Type, {255, 255, 255, 255}),
+  ?valid(Type, {0, 0, 0, 0}),
+  ?valid(Type, {0, 0, 0, 0, 0, 0, 0, 0}),
+  ?valid(Type, {65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535}),
+  ?invalid(Type, {256, 256, 256, 256}),
+  ?invalid(Type, {100, -1, 0, 0}),
+  ?invalid(Type, {0, 0, 0}),
+  ?invalid(Type, {65535, 65535, 65535, 65535, 65535, 65535, 65535, 65536}),
+  ?invalid(Type, foo).
