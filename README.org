@@ -1,6 +1,6 @@
 #+TITLE: Typerefl
 
-[[https://github.com/k32/typerefl/actions/workflows/ci.yml/badge.svg][CI status]]
+[[https://github.com/k32/typerefl/actions/workflows/ci.yml/badge.svg]]
 
 This library reifies dialyzer types as ordinary Erlang functions. It
 enables e.g. validation of terms against dialyzer typespecs in the
