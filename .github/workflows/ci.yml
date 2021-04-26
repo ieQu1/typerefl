@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        otp: [23.2.5, 21.3.8.21]
+    container:
+      image: erlang:${{ matrix.otp }}
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Compile and run tests
+      run: make
