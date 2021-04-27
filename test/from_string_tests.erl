@@ -24,6 +24,8 @@ from_string_test() ->
   ?assertMatch({ok, foo}, typerefl:from_string(foo, "foo")),
   ?assertMatch({error, _}, typerefl:from_string(foo, "bar")),
   ?assertMatch({ok, ''}, typerefl:from_string('', "")),
+  ?assertMatch({ok, "hi"}, typerefl:from_string(typerefl:regexp_string("^hi$"), "hi")),
+  ?assertMatch({ok, <<"hi">>}, typerefl:from_string(typerefl:regexp_binary("^hi$"), "hi")),
   ok.
 
 from_strings_test() ->

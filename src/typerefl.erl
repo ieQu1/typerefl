@@ -476,6 +476,7 @@ regexp_string(Regexp) ->
                                is_list(Term) andalso re_match(Term, RE)
                            end
                 , name => Name
+                , from_string => fun wrap_ok/1
                 }}.
 
 %% @doc Type of UTF8 binaries that match a regexp
@@ -487,6 +488,7 @@ regexp_binary(Regexp) ->
                                is_binary(Term) andalso re_match(Term, RE)
                            end
                 , name => Name
+                , from_string => fun (V) -> {ok, list_to_binary(V)} end
                 }}.
 
 %% @doc Type of IPv6 addresses
