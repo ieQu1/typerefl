@@ -63,6 +63,7 @@
 
 -type type() :: type_intern()
               | atom()
+              | integer()
               | tuple()
               | [type(), ...]
               | []
@@ -98,7 +99,7 @@ nodef({?type_refl, Map}) ->
 %% @param Args Values of type variables
 -spec alias(string(), type(), map(), [type()]) -> type().
 alias(Name0, Type, AdditionalAttrs, Args) ->
-  {?type_refl, Map0} = Type,
+  {?type_refl, Map0} = desugar(Type),
   Map = maps:merge(Map0, AdditionalAttrs),
   Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
   OldName = maps:get(name, Map),
@@ -439,6 +440,20 @@ nil() ->
                 , name => "[]"
                 }}.
 
+%% @doc Reflection of concrete atom type
+-spec atom(atom()) -> type().
+atom(A) ->
+  {?type_refl, #{ check => fun(T) -> T =:= A end
+                , name => atom_to_list(A)
+                }}.
+
+%% @doc Reflection of concrete integer type
+-spec integer(integer()) -> type().
+integer(I)->
+  {?type_refl, #{ check => fun(T) -> T =:= I end
+                , name => integer_to_list(I)
+                }}.
+
 %% @doc Reflection of `#{...}' type
 -spec map([map_field_spec()]) -> type().
 map(FieldSpecs) ->
@@ -552,11 +567,6 @@ defn(Type) ->
 
 %% @private Run the continuation and extend the result if needed
 -spec check(type(), term()) -> result().
-check(Type, Term) when is_atom(Type) ->
-  case Term of
-    Type -> true;
-    _    -> {false, [{Type, Term}]}
-  end;
 check(Type = {?type_refl, #{check := Check}}, Term) ->
   case Check(Term) of
     true           -> true;
@@ -688,6 +698,10 @@ desugar([T]) ->
   list(T);
 desugar([]) ->
   nil();
+desugar(A) when is_atom(A) ->
+  atom(A);
+desugar(I) when is_integer(I) ->
+  integer(I);
 desugar(T) when is_map(T) ->
   map([{fuzzy, K, V} || {K, V} <- maps:to_list(T)]).
 
