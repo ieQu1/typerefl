@@ -13,6 +13,8 @@
                     , typerefl:typecheck(Type, Term)
                     )).
 
+-type wow() :: wow.
+-type one() :: 1.
 -type simple(A) :: A.
 
 %% Recursive type is fine too:
@@ -20,14 +22,22 @@
 
 -type stupid_list(A) :: stupid_list(A, nil).
 
--reflect_type([simple/1, stupid_list/1]).
+-reflect_type([wow/0, one/0, simple/1, stupid_list/1]).
 
 concrete_atom_test() ->
   ?valid(true, true),
   ?valid(false, false),
   ?invalid(foo, 1),
   ?invalid(foo, []),
-  ?invalid(foo, bar).
+  ?invalid(foo, bar),
+  ?valid(wow(), wow),
+  ?invalid(wow(), foo).
+
+concrete_integer_test() ->
+  ?valid(1, 1),
+  ?invalid(1, 2),
+  ?valid(one(), 1),
+  ?invalid(one(), 2).
 
 bool_test() ->
   ?valid(boolean(), true),
