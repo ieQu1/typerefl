@@ -18,6 +18,7 @@
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
         , ip4_address/0, ip6_address/0, ip_address/0
+        , integer/1, atom/1
         ]).
 
 %% Internal
