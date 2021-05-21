@@ -26,6 +26,13 @@ from_string_test() ->
   ?assertMatch({ok, ''}, typerefl:from_string('', "")),
   ?assertMatch({ok, "hi"}, typerefl:from_string(typerefl:regexp_string("^hi$"), "hi")),
   ?assertMatch({ok, <<"hi">>}, typerefl:from_string(typerefl:regexp_binary("^hi$"), "hi")),
+  ?assertMatch({ok, "}"}, typerefl:from_string(union(string(), boolean()), "}")),
+  ?assertMatch({ok, "}"}, typerefl:from_string(union(boolean(), string()), "}")),
+  ?assertMatch({error, _}, typerefl:from_string(union(boolean(), boolean()), "}")),
+  ?assertMatch({ok, '}'}, typerefl:from_string(union([boolean(), foo, atom()]), "}")),
+  ?assertMatch({ok, "foo"}, typerefl:from_string(union(integer(), string()), "foo")),
+  ?assertMatch({ok, "foo"}, typerefl:from_string(union(string(), integer()), "foo")),
+  ?assertMatch({error, _}, typerefl:from_string(union(integer(), integer()), "foo")),
   ok.
 
 from_strings_test() ->
