@@ -316,6 +316,7 @@ union(A, B) ->
                 , name => [name(A), " | ", name(B)]
                 , definition => [defn(A), defn(B)]
                 , args => [A, B]
+                , from_string => fun(S) -> union_from_string(S, A, B) end
                 }}.
 
 %% @doc Reflection of `A | ...' type
@@ -743,3 +744,30 @@ wrap_ok(A) ->
 
 atom_from_string(Str) ->
   {ok, list_to_atom(Str)}.
+
+%% @private Try to parse a string to either TypeA or TypeB.
+%% If succeed in both, TypeA wins.
+-spec union_from_string(string(), type(), type()) -> {ok, term()} | {error, string()}.
+union_from_string(String, TypeA, TypeB) ->
+  case {convert_and_check(TypeA, String), convert_and_check(TypeB, String)} of
+    {{ok, ValueA}, _} ->
+      {ok, ValueA};
+    {_, {ok, VB}} ->
+      {ok, VB};
+    {{error, _}, {error, _}} ->
+      {error, "Unable to parse string"}
+  end.
+
+%% @private convert string and check the output.
+convert_and_check(Type, String) ->
+  case from_string(Type, String) of
+    {ok, Value} ->
+      case typecheck(Type, Value) of
+        ok ->
+          {ok, Value};
+        {error, _} = E ->
+          E
+      end;
+    {error, _} = E ->
+      E
+  end.
