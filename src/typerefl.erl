@@ -122,7 +122,7 @@ typecheck(Type, Term) ->
   case check(Type, Term) of
     true ->
       ok;
-    {false, Stack0} ->
+    {false, _Stack} ->
       %% TODO: do something with stack
       Result = io_lib:format( "Expected type: ~s~nGot: ~p~n"
                             , [print(Type), Term]

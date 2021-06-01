@@ -19,14 +19,6 @@
               , ipv6_address/0, uri/0
               ]).
 
--typerefl_verify({uri/0, ?MODULE, verify_uri}).
-
--typerefl_from_string({ipv4_address/0, inet, parse_ipv4_address}).
--typerefl_pretty_print({ipv4_address/0, inet, ntoa}).
-
--typerefl_from_string({ipv6_address/0, inet, parse_ipv6_address}).
--typerefl_pretty_print({ipv6_address/0, inet, ntoa}).
-
 %% -----------------------------------------------------------------------------
 
 -type mybool() :: boolean().
@@ -142,6 +134,14 @@ remote_type_refl_test() ->
   ?typeEqual(typerefl:list(typerefl:boolean()), remote_types()).
 
 %% -----------------------------------------------------------------------------
+
+-typerefl_verify({uri/0, ?MODULE, verify_uri}).
+
+-typerefl_from_string({ipv4_address/0, inet, parse_ipv4_address}).
+-typerefl_pretty_print({ipv4_address/0, inet, ntoa}).
+
+-typerefl_from_string({ipv6_address/0, inet, parse_ipv6_address}).
+-typerefl_pretty_print({ipv6_address/0, inet, ntoa}).
 
 -type ignored() :: string().
 
