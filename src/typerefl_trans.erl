@@ -3,7 +3,7 @@
 
 -include("typerefl_int.hrl").
 
-%-define(debug, true).
+%%-define(debug, true).
 
 -ifdef(debug).
 -define(log(A, B), io:format(user, A "~n", B)).
@@ -108,8 +108,8 @@
         {'fun', Line,
          {function, ?atom(MODULE), ?atom(NAME), {integer, Line, ARITY}}}).
 
-parse_transform(Forms0, _Options) ->
-  %%?log("Dump of the module AST: ~p", [Forms0]),
+parse_transform(Forms0, Options) ->
+  %%?log("Dump of the module AST:~n~p~n", [Forms0]),
   %% Collect module attributes:
   Ignored = ignored(Forms0),
   Typedefs0 = find_local_typedefs(Forms0),
@@ -134,7 +134,68 @@ parse_transform(Forms0, _Options) ->
                           State#s.reflected_types),
   ?log("Reified types:~n~p", [ReifiedTypes]),
   %% Append type reflections to the module definition:
-  Forms1 ++ [I || {_, I} <- maps:to_list(ReifiedTypes)].
+  Forms2 = Forms1 ++ [I || {_, I} <- maps:to_list(ReifiedTypes)],
+  Forms = case lists:member(warn_unused_import, Options) of
+            true  -> remove_unused_imports(Forms2);
+            false -> Forms2
+          end,
+  organize_attributes(Forms).
+
+%% typerefl.hrl imports some functions, this part of the parse
+%% transform removes the unused ones
+remove_unused_imports([{attribute, Line, import, {?typerefl_module, Imports0}}|Rest]) ->
+  Imports = maps:from_list([{I, 0} || I <- Imports0]),
+  UsageCount = mark_used_imports(Imports, Rest),
+  UsedImports = [Key || {Key, Val} <- maps:to_list(UsageCount), Val > 0],
+  [{attribute, Line, import, {?typerefl_module, UsedImports}}
+  |Rest];
+remove_unused_imports([A|Rest]) ->
+  [A|remove_unused_imports(Rest)];
+remove_unused_imports([]) ->
+  [].
+
+mark_used_imports(Imports, Forms) ->
+  lists:foldl(fun scan_forms/2, Imports, Forms).
+
+scan_forms({function, _L, _F, _A, Clauses}, Map) ->
+    lists:foldl(fun deep_scan/2, Map, Clauses);
+scan_forms(_, Map) ->
+    Map.
+
+deep_scan({'fun', _L, {function, Name, Arity}}, Map) ->
+    maybe_update_count({Name, Arity}, Map);
+deep_scan({call, _L1, Call, Args}, Map0) ->
+    case Call of
+        {atom, _L2, Name} ->
+            Map = maybe_update_count({Name, length(Args)}, Map0),
+            deep_scan(Args, Map);
+        _ ->
+            deep_scan([Call | Args], Map0)
+    end;
+deep_scan(Other, Map) when is_list(Other) ->
+    lists:foldl(fun deep_scan/2, Map, Other);
+deep_scan(Other, Map) when is_tuple(Other) ->
+    deep_scan(tuple_to_list(Other), Map);
+deep_scan(_Other, Map) ->
+    Map.
+
+maybe_update_count(Key, Map) ->
+  case Map of
+    #{Key := Val} ->
+      Map#{Key => Val + 1};
+    _ ->
+      Map
+  end.
+
+%% Remove all typerefl attributes, because they may appear in places
+%% where erlang compiler doesn't expect them.
+organize_attributes(Forms) ->
+  lists:filter(fun({attribute, _Line, Attr, _Params}) when
+                     Attr =:= typerefl_verify;
+                     Attr =:= typerefl_pretty_print;
+                     Attr =:= typerefl_from_string -> false;
+                  (_) -> true
+               end, Forms).
 
 %% Reflect a local type
 -spec refl_type(local_tref(), #s{}) -> #s{}.
