@@ -3,6 +3,8 @@
 
 -include("typerefl_int.hrl").
 
+-compile({parse_transform, typerefl_quote}).
+
 %%-define(debug, true).
 
 -ifdef(debug).
@@ -38,75 +40,9 @@
         }).
 
 -define(typerefl_module, typerefl).
--define(lazy_self_var, {var, Line, '__TypeReflSelf'}).
--define(type_vars_var, {var, Line, '__TypeReflTypeVars'}).
+-define(lazy_self_var, __TypeReflSelf).
 
-%% Naming convention: uppercase macros are for matching, lower-case
-%% are for generation (they contain Line as a free variable)
-
--define(INT(Line, Val),
-        {integer, Line, Val}).
-
--define(INT(Val), ?INT(_, Val)).
-
--define(int(Val),
-        {integer, Line, Val}).
-
--define(ATOM(Line, Atom),
-        {atom, Line, Atom}).
-
--define(ATOM(Atom), ?ATOM(_, Atom)).
-
--define(atom(Atom),
-        {atom, Line, Atom}).
-
--define(LCALL(Line, Name, Args),
-        {call, Line, ?ATOM(Name), Args}).
-
--define(tuple(Elems),
-        {tuple, Line, Elems}).
-
--define(cons(A, B),
-        {cons, Line, A, B}).
-
--define(nil,
-        {nil, Line}).
-
--define(map(Elems),
-        {map, Line, Elems}).
-
--define(ass(Key, Value),
-        {map_field_assoc, Line, Key, Value}).
-
--define(lcall(Name, Args),
-        {call, Line, ?atom(Name), Args}).
-
--define(RCALL(Line, Module, Function, Args),
-        {call, Line
-        , {remote, _, ?ATOM(Module), ?ATOM(Function)}
-        , Args
-        }).
-
--define(rcall(Module, Function, Args),
-        {call, Line
-        , {remote, Line, ?atom(Module), ?atom(Function)}
-        , Args
-        }).
-
--define(TYPE_ID(Name, Arity),
-        {op, _, '/', ?ATOM(Name), {integer, _, Arity}}).
-
--define(type_id(Name, Arity),
-        {op, Line, '/', ?ATOM(Name), {integer, _, Arity}}).
-
--define(one_clause_fun(Args, Body),
-        {'fun', Line,
-         {clauses, [{clause, Line, Args, [], Body}
-                   ]}}).
-
--define(rfun_ref(MODULE, NAME, ARITY),
-        {'fun', Line,
-         {function, ?atom(MODULE), ?atom(NAME), {integer, Line, ARITY}}}).
+-include("typerefl_ast_macros.hrl").
 
 parse_transform(Forms0, Options) ->
   %%?log("Dump of the module AST:~n~p~n", [Forms0]),
@@ -284,7 +220,7 @@ do_refl_type_call(Parent, State0, Line, {Module, Function, Args0}) ->
 maybe_lazy_call({Name, Arity}, #s{module = Module}, Line, {Module, Name, Args})
   when length(Args) =:= Arity ->
   %% We are refering to self, this call should be lazy:
-  ?lazy_self_var;
+  '$$'(?lazy_self_var);
 maybe_lazy_call(_, #s{module = Module}, Line, {Module, Name, Args}) ->
   %% Local type:
   ?lcall(Name, Args);
@@ -367,7 +303,7 @@ maybe_refl_type( TRef
 -spec make_reflection_function(module(), #s{}, reflected_type()) -> ast().
 make_reflection_function( Module
                         , State
-                        , #typedef{ body = AST
+                        , #typedef{ body = __AST
                                   , params = Vars0
                                   , name = Name
                                   , line = Line
@@ -375,25 +311,23 @@ make_reflection_function( Module
   Arity = length(Vars0),
   Vars = [{var, Line, Var} || Var <- Vars0],
   NameStr = io_lib:format("~p:~p", [Module, Name]),
-  NameAST = {string, Line, lists:flatten(NameStr)},
-  SelfAST = {'fun', Line, {function, Name, Arity}},
-  LazySelfAST = ?rcall(?typerefl_module, make_lazy,
-                       [ NameAST
-                       , SelfAST
-                       , ?type_vars_var
-                       ]),
-  AdditionalAttrsAST = make_additional_attrs_ast({Name, Arity}, Line, State),
+  Name__AST = {string, Line, lists:flatten(NameStr)},
+  Self__AST = {'fun', Line, {function, Name, Arity}},
   {function, Line, Name, Arity,
    [{clause, Line, Vars, []
-    , [ {match, Line, ?type_vars_var, mk_literal_list(Line, Vars)}
-      , {match, Line, ?lazy_self_var, LazySelfAST}
-      , ?rcall(?typerefl_module, alias,
-               [ NameAST
-               , AST
-               , AdditionalAttrsAST
-               , ?type_vars_var
-               ])
-      ]}
+    , ['$$'(begin
+              %% This variable is not unused, it can be referred to in __AST
+              ?lazy_self_var = ?typerefl_module:make_lazy( Name__AST
+                                                         , Self__AST
+                                                         , '$'(mk_literal_list(Line, Vars))
+                                                         ),
+              ?typerefl_module:alias( Name__AST
+                                    , __AST
+                                    , '$'(make_additional_attrs_ast({Name, Arity}, Line, State))
+                                    , '$'(mk_literal_list(Line, Vars))
+                                    )
+            end)]
+    }
    ]}.
 
 %% Insert attributes after `module'
