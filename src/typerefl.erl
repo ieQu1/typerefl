@@ -27,7 +27,9 @@
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
 
--export_type([type/0, check_result/0, result/0, typename/0]).
+-export_type([type/0, check_result/0, result/0, typename/0, err/0]).
+
+-type err() :: map().
 
 %%====================================================================
 %% Types
@@ -117,17 +119,18 @@ alias(Name0, Type, AdditionalAttrs, Args) ->
 %% ok = typecheck(integer(), 12),
 %% {error, _} = typecheck(integer(), [])
 %% '''
--spec typecheck(type(), term()) -> ok | {error, string()}.
+-spec typecheck(type(), term()) -> ok | {error, err()}.
 typecheck(Type, Term) ->
   case check(Type, Term) of
     true ->
       ok;
-    {false, _Stack} ->
-      %% TODO: do something with stack
-      Result = io_lib:format( "Expected type: ~s~nGot: ~p~n"
-                            , [print(Type), Term]
-                            ),
-      {error, lists:flatten(Result)}
+    {false, Stack} ->
+      Result = #{ reason => typerefl_typecheck
+                , expected => print(Type)
+                , got => Term
+                , typerefl_path => lists:reverse(Stack)
+                },
+      {error, Result}
   end.
 
 %% @doc Print definition of a type.
@@ -357,7 +360,7 @@ nonempty_list(A) ->
 -spec maybe_improper_list(type(), type()) -> type().
 maybe_improper_list(A, B) ->
   {?type_refl, #{ check => validate_list(A, B, true)
-                , name => io_lib:format("maybe_improper_list(~s, ~s)", [name(A), name(B)])
+                , name => name("maybe_improper_list(~s, ~s)", [name(A), name(B)])
                 , args => [A, B]
                 , definition => [defn(A), defn(B)]
                 }}.
@@ -371,7 +374,7 @@ maybe_improper_list() ->
 -spec nonempty_maybe_improper_list(type(), type()) -> type().
 nonempty_maybe_improper_list(A, B) ->
   {?type_refl, #{ check => validate_list(A, B, false)
-                , name => io_lib:format("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
+                , name => name("nonempty_maybe_improper_list(~s, ~s)", [name(A), name(B)])
                 , args => [A, B]
                 , definition => [defn(A), defn(B)]
                 }}.
@@ -392,7 +395,7 @@ range(Min, Max) ->
                               (_) ->
                                false
                            end
-                , name => io_lib:format("~p..~p", [Min, Max])
+                , name => name("~p..~p", [Min, Max])
                 }}.
 
 %% @doc Reflection of `char()' type
@@ -490,7 +493,7 @@ iodata() ->
 -spec regexp_string(_Regexp :: string() | binary()) -> type().
 regexp_string(Regexp) ->
   {ok, RE} = re:compile(Regexp, [unicode]),
-  Name = io_lib:format("string(~p)", [Regexp]),
+  Name = name("string(~p)", [Regexp]),
   {?type_refl, #{ check => fun(Term) ->
                                is_list(Term) andalso re_match(Term, RE)
                            end
@@ -502,7 +505,7 @@ regexp_string(Regexp) ->
 -spec regexp_binary(_Regexp :: string() | binary()) -> type().
 regexp_binary(Regexp) ->
   {ok, RE} = re:compile(Regexp, [unicode]),
-  Name = io_lib:format("binary(~p)", [Regexp]),
+  Name = name("binary(~p)", [Regexp]),
   {?type_refl, #{ check => fun(Term) ->
                                is_binary(Term) andalso re_match(Term, RE)
                            end
@@ -773,3 +776,7 @@ convert_and_check(Type, String) ->
     {error, _} = E ->
       E
   end.
+
+%% @private Format a name string.
+name(Fmt, Args) ->
+    lists:flatten(io_lib:format(Fmt, Args)).
