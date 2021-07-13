@@ -37,6 +37,7 @@
         , custom_verif        = #{} :: #{local_tref() => ast()}
         , custom_from_string  = #{} :: #{local_tref() => ast()}
         , custom_pretty_print = #{} :: #{local_tref() => ast()}
+        , type_surrogates     = #{} :: #{mfa() => {module(), atom()}}
         }).
 
 -define(typerefl_module, typerefl).
@@ -127,9 +128,11 @@ maybe_update_count(Key, Map) ->
 %% where erlang compiler doesn't expect them.
 organize_attributes(Forms) ->
   lists:filter(fun({attribute, _Line, Attr, _Params}) when
+                     Attr =:= reflect_type;
                      Attr =:= typerefl_verify;
                      Attr =:= typerefl_pretty_print;
-                     Attr =:= typerefl_from_string -> false;
+                     Attr =:= typerefl_from_string;
+                     Attr =:= typerefl_surrogate -> false;
                   (_) -> true
                end, Forms).
 
@@ -217,14 +220,20 @@ do_refl_type_call(Parent, State0, Line, {Module, Function, Args0}) ->
   AST = maybe_lazy_call(Parent, State, Line, {Module, Function, Args}),
   {AST, State}.
 
-maybe_lazy_call({Name, Arity}, #s{module = Module}, Line, {Module, Name, Args})
+maybe_lazy_call(Parent, State = #s{type_surrogates = Surrogates}, Line, {Module0, Function0, Args}) ->
+  %% Check if we need to substitute this type with a surrogate
+  Arity = length(Args),
+  {Module, Function} = maps:get({Module0, Function0, Arity}, Surrogates, {Module0, Function0}),
+  do_maybe_lazy_call(Parent, State, Line, {Module, Function, Args}).
+
+do_maybe_lazy_call({Name, Arity}, #s{module = Module}, _Line, {Module, Name, Args})
   when length(Args) =:= Arity ->
   %% We are refering to self, this call should be lazy:
   '$$'(?lazy_self_var);
-maybe_lazy_call(_, #s{module = Module}, Line, {Module, Name, Args}) ->
+do_maybe_lazy_call(_, #s{module = Module}, Line, {Module, Name, Args}) ->
   %% Local type:
   ?lcall(Name, Args);
-maybe_lazy_call(_, _, Line, {Module, Name, Args}) ->
+do_maybe_lazy_call(_, _, Line, {Module, Name, Args}) ->
   %% Remote type:
   ?rcall(Module, Name, Args).
 
@@ -234,18 +243,21 @@ ignored(Forms) ->
 
 scan_custom_attributes(State, []) ->
   State;
-scan_custom_attributes(State0, [{attribute, _, Attrubute, {Type, Module, Function}}|Forms]) ->
+scan_custom_attributes(State0, [{attribute, _, Attribute, {Type, Module, Function}}|Forms]) ->
   #s{ custom_verif = CustomVerif
     , custom_from_string = CustomFromString
     , custom_pretty_print = CustomPrettyPrint
+    , type_surrogates = Surrogates
     } = State0,
-  State = case Attrubute of
+  State = case Attribute of
             typerefl_verify ->
               State0#s{custom_verif = CustomVerif #{Type => {Module, Function}}};
             typerefl_from_string ->
               State0#s{custom_from_string = CustomFromString #{Type => {Module, Function}}};
             typerefl_pretty_print ->
               State0#s{custom_pretty_print = CustomPrettyPrint #{Type => {Module, Function}}};
+            typerefl_surrogate ->
+              State0#s{type_surrogates = Surrogates #{Type => {Module, Function}}};
             _ ->
               State0
           end,

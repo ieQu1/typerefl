@@ -159,6 +159,15 @@ timeout_test() ->
   ?invalid(timeout(), []),
   ?invalid(timeout(), -1).
 
+unicode_charlist_test() ->
+  ?valid(typerefl:unicode_charlist(), []),
+  ?valid(typerefl:unicode_charlist(), [$∇ | <<"abc">>]),
+  ?valid(typerefl:unicode_charlist(), [<<"cde">>, [[<<"⚘">>]]]),
+  ?valid(typerefl:unicode_charlist(), [$a, <<"abc">>, $∫]),
+  ?invalid(typerefl:unicode_charlist(), foo),
+  ?invalid(typerefl:unicode_charlist(), 3),
+  ?invalid(typerefl:unicode_charlist(), <<"bar">>).
+
 map_test() ->
   T = #{atom() => string()},
   ?valid(T, #{}),

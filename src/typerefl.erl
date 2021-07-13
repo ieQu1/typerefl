@@ -18,7 +18,7 @@
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
         , ip4_address/0, ip6_address/0, ip_address/0
-        , integer/1, atom/1
+        , integer/1, atom/1, unicode_charlist/0
         ]).
 
 %% Internal
@@ -498,6 +498,14 @@ iolist() ->
   Elem = union([byte(), binary(), Self]),
   Tail = union(binary(), nil()),
   alias("iolist", maybe_improper_list(Elem, Tail)).
+
+%% @doc Approximate reflection of `unicode:charlist()' type
+-spec unicode_charlist() -> type().
+unicode_charlist() ->
+  Self = make_lazy("unicode:charlist()", fun unicode_charlist/0, []),
+  Elem = union([char(), binary(), Self]),
+  Tail = union(binary(), nil()),
+  alias("unicode:charlist", maybe_improper_list(Elem, Tail)).
 
 %% @doc Reflection of `iodata()' type
 -spec iodata() -> type().
