@@ -14,7 +14,7 @@
         , maybe_improper_list/2, nonempty_maybe_improper_list/0
         , nonempty_maybe_improper_list/2, nonempty_string/0
         , iolist/0, iodata/0, printable_latin1_list/0
-        , printable_unicode_list/0
+        , printable_unicode_list/0, mfa/0, timeout/0, identifier/0
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
         , ip4_address/0, ip6_address/0, ip_address/0
@@ -422,6 +422,21 @@ module() ->
 -spec non_neg_integer() -> type().
 non_neg_integer() ->
   alias("non_neg_integer", nodef(range(0, inf))).
+
+%% @doc Reflection of `mfa()' type
+-spec mfa() -> type().
+mfa() ->
+  alias("mfa", tuple([module(), atom(), arity()])).
+
+%% @doc Reflection of `identifier()' type
+-spec identifier() -> type().
+identifier() ->
+  alias("identifier", union([pid(), port(), reference()])).
+
+%% @doc Reflection of `timeout()' type
+-spec timeout() -> type().
+timeout() ->
+  alias("timeout", union([infinity, non_neg_integer()])).
 
 %% @doc Reflection of `node()' type
 -spec node() -> type().

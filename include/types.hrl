@@ -11,6 +11,7 @@
         , nonempty_maybe_improper_list/2, nonempty_string/0
         , iolist/0, iodata/0, union/2, union/1, tuple/1, range/2
         , printable_latin1_list/0, printable_unicode_list/0
+        , mfa/0, timeout/0, identifier/0
         ]).
 
 -compile({parse_transform, typerefl_trans}).
