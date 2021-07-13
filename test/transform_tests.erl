@@ -193,6 +193,18 @@ exports_test() ->
 
 %% -----------------------------------------------------------------------------
 
+-type surrogate() :: unicode:charlist().
+
+-reflect_type([surrogate/0]).
+
+surrogate_test() ->
+  %% Verify that the reflected type's check function is the same as in
+  %% the surrogate type:
+  {?type_refl, #{check := Check}} = typerefl:unicode_charlist(),
+  {?type_refl, #{check := Check}} = surrogate().
+
+%% -----------------------------------------------------------------------------
+
 typeEqual(ExpectedName0, A0, B0) ->
   %% 0. Check return type:
   ?assertMatch({?type_refl, #{}}, A0),

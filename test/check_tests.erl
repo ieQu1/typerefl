@@ -136,6 +136,38 @@ binary_test() ->
   ?invalid(binary(), "fooo"),
   ?invalid(binary(), 1).
 
+mfa_test() ->
+  ?valid(mfa(), {foo, bar, 2}),
+  ?valid(mfa(), {foo, bar, 255}),
+  ?invalid(mfa(), foo),
+  ?invalid(mfa(), {foo, 2}),
+  ?invalid(mfa(), {foo, bar, 256}).
+
+identifier_test() ->
+  ?valid(identifier(), self()),
+  ?valid(identifier(), open_port({spawn, "true"}, [])),
+  ?valid(identifier(), make_ref()),
+  ?invalid(identifier(), 42),
+  ?invalid(identifier(), foo),
+  ?invalid(identifier(), "foo").
+
+timeout_test() ->
+  ?valid(timeout(), infinity),
+  ?valid(timeout(), 0),
+  ?valid(timeout(), 123),
+  ?invalid(timeout(), foo),
+  ?invalid(timeout(), []),
+  ?invalid(timeout(), -1).
+
+unicode_charlist_test() ->
+  ?valid(typerefl:unicode_charlist(), []),
+  ?valid(typerefl:unicode_charlist(), [$∇ | <<"abc">>]),
+  ?valid(typerefl:unicode_charlist(), [<<"cde">>, [[<<"⚘">>]]]),
+  ?valid(typerefl:unicode_charlist(), [$a, <<"abc">>, $∫]),
+  ?invalid(typerefl:unicode_charlist(), foo),
+  ?invalid(typerefl:unicode_charlist(), 3),
+  ?invalid(typerefl:unicode_charlist(), <<"bar">>).
+
 map_test() ->
   T = #{atom() => string()},
   ?valid(T, #{}),

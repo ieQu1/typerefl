@@ -14,11 +14,11 @@
         , maybe_improper_list/2, nonempty_maybe_improper_list/0
         , nonempty_maybe_improper_list/2, nonempty_string/0
         , iolist/0, iodata/0, printable_latin1_list/0
-        , printable_unicode_list/0
+        , printable_unicode_list/0, mfa/0, timeout/0, identifier/0
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
         , ip4_address/0, ip6_address/0, ip_address/0
-        , integer/1, atom/1
+        , integer/1, atom/1, unicode_charlist/0
         ]).
 
 %% Internal
@@ -423,6 +423,21 @@ module() ->
 non_neg_integer() ->
   alias("non_neg_integer", nodef(range(0, inf))).
 
+%% @doc Reflection of `mfa()' type
+-spec mfa() -> type().
+mfa() ->
+  alias("mfa", tuple([module(), atom(), arity()])).
+
+%% @doc Reflection of `identifier()' type
+-spec identifier() -> type().
+identifier() ->
+  alias("identifier", union([pid(), port(), reference()])).
+
+%% @doc Reflection of `timeout()' type
+-spec timeout() -> type().
+timeout() ->
+  alias("timeout", union([infinity, non_neg_integer()])).
+
 %% @doc Reflection of `node()' type
 -spec node() -> type().
 node() ->
@@ -483,6 +498,14 @@ iolist() ->
   Elem = union([byte(), binary(), Self]),
   Tail = union(binary(), nil()),
   alias("iolist", maybe_improper_list(Elem, Tail)).
+
+%% @doc Approximate reflection of `unicode:charlist()' type
+-spec unicode_charlist() -> type().
+unicode_charlist() ->
+  Self = make_lazy("unicode:charlist()", fun unicode_charlist/0, []),
+  Elem = union([char(), binary(), Self]),
+  Tail = union(binary(), nil()),
+  alias("unicode:charlist", maybe_improper_list(Elem, Tail)).
 
 %% @doc Reflection of `iodata()' type
 -spec iodata() -> type().
