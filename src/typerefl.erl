@@ -18,7 +18,7 @@
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
         , ip4_address/0, ip6_address/0, ip_address/0
-        , integer/1, atom/1, unicode_charlist/0
+        , integer/1, atom/1, unicode_charlist/0, unicode_chardata/0
         ]).
 
 %% Internal
@@ -511,6 +511,11 @@ unicode_charlist() ->
 -spec iodata() -> type().
 iodata() ->
   union(iolist(), binary()).
+
+%% @doc Approximate reflection of `unicode:chardata()' type
+-spec unicode_chardata() -> type().
+unicode_chardata() ->
+  alias("unicode:chardata", union([unicode_charlist(), binary()])).
 
 %% @doc Type of UTF8 strings that match a regexp
 -spec regexp_string(_Regexp :: string() | binary()) -> type().
