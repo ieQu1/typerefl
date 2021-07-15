@@ -18,5 +18,8 @@
 
 -typerefl_surrogate({{unicode, charlist, 0}, typerefl, unicode_charlist}).
 -typerefl_surrogate({{unicode, chardata, 0}, typerefl, unicode_chardata}).
+-typerefl_surrogate({{inet, ip_address, 0}, typerefl, ip_address}).
+-typerefl_surrogate({{inet, ip4_address, 0}, typerefl, ip4_address}).
+-typerefl_surrogate({{inet, ip6_address, 0}, typerefl, ip6_address}).
 
 -endif.
