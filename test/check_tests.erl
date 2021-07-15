@@ -168,6 +168,15 @@ unicode_charlist_test() ->
   ?invalid(typerefl:unicode_charlist(), 3),
   ?invalid(typerefl:unicode_charlist(), <<"bar">>).
 
+unicode_chardata_test() ->
+  ?valid(typerefl:unicode_chardata(), []),
+  ?valid(typerefl:unicode_chardata(), [$∇ | <<"abc">>]),
+  ?valid(typerefl:unicode_chardata(), [<<"cde">>, [[<<"⚘">>]]]),
+  ?valid(typerefl:unicode_chardata(), [$a, <<"abc">>, $∫]),
+  ?valid(typerefl:unicode_chardata(), <<"∇">>),
+  ?invalid(typerefl:unicode_chardata(), foo),
+  ?invalid(typerefl:unicode_chardata(), 3).
+
 map_test() ->
   T = #{atom() => string()},
   ?valid(T, #{}),

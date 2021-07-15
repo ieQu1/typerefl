@@ -17,5 +17,6 @@
 -compile({parse_transform, typerefl_trans}).
 
 -typerefl_surrogate({{unicode, charlist, 0}, typerefl, unicode_charlist}).
+-typerefl_surrogate({{unicode, chardata, 0}, typerefl, unicode_chardata}).
 
 -endif.

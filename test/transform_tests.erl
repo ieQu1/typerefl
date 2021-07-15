@@ -193,15 +193,19 @@ exports_test() ->
 
 %% -----------------------------------------------------------------------------
 
--type surrogate() :: unicode:charlist().
+-type surrogate1() :: unicode:charlist().
+-type surrogate2() :: unicode:chardata().
 
--reflect_type([surrogate/0]).
+-reflect_type([surrogate1/0, surrogate2/0]).
 
 surrogate_test() ->
   %% Verify that the reflected type's check function is the same as in
   %% the surrogate type:
-  {?type_refl, #{check := Check}} = typerefl:unicode_charlist(),
-  {?type_refl, #{check := Check}} = surrogate().
+  {?type_refl, #{check := Check1}} = typerefl:unicode_charlist(),
+  {?type_refl, #{check := Check1}} = surrogate1(),
+
+  {?type_refl, #{check := Check2}} = typerefl:unicode_chardata(),
+  {?type_refl, #{check := Check2}} = surrogate2().
 
 %% -----------------------------------------------------------------------------
 
