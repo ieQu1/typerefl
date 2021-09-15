@@ -3,7 +3,8 @@
 -include("typerefl_int.hrl").
 
 %% API
--export([typecheck/2, print/1, pretty_print_value/2, from_string/2, from_string_/2]).
+-export([typecheck/2, print/1, pretty_print_value/2,
+         from_string/2, from_string_/2, name/1]).
 
 %% Type reflections (Copy verbatim to types.hrl)
 -export([ any/0, atom/0, binary/0, boolean/0, float/0, function/0
@@ -542,11 +543,7 @@ ip_address() ->
                      },
   alias("ip_address()", BaseType, AdditionalAttrs, []).
 
-%%====================================================================
-%% Internal functions
-%%====================================================================
-
-%% @private Get type name
+%% @doc Get type name.
 -spec name(type() | ?type_var(atom())) -> string().
 name(A) when is_atom(A) ->
   atom_to_list(A);
@@ -558,6 +555,10 @@ name(#lazy_type{name = Name}) ->
   Name;
 name(T) ->
   name(desugar(T)).
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
 
 %% @private Get type definition (relevant for alias types)
 -spec defn(type()) -> iolist().
