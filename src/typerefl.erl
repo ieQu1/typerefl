@@ -51,7 +51,7 @@
 
 -define(prim(Name, Check, Rest),
         {?type_refl, #{ check => fun erlang:Check/1
-                      , name => ??Name "()"
+                      , name => str(??Name "()")
                       } Rest}).
 
 -define(prim(Name, Check), ?prim(Name, Check, #{})).
@@ -107,7 +107,7 @@ alias(Name0, Type, AdditionalAttrs, Args) ->
   Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
   OldName = maps:get(name, Map),
   OldDefn = maps:get(definition, Map, []),
-  {?type_refl, Map#{ name => Name
+  {?type_refl, Map#{ name => str(Name)
                    , definition =>
                        [{Name, OldName} | OldDefn]
                    }}.
@@ -318,7 +318,7 @@ tuple() ->
 -spec union(type(), type()) -> type().
 union(A, B) ->
   {?type_refl, #{ check => or_else(check(A), check(B))
-                , name => [name(A), " | ", name(B)]
+                , name => str([name(A), " | ", name(B)])
                 , definition => [defn(A), defn(B)]
                 , args => [A, B]
                 , from_string => fun(S) -> union_from_string(S, A, B) end
@@ -333,7 +333,7 @@ union([H|Rest]) ->
 -spec tuple([type()]) -> type().
 tuple(Args) ->
   {?type_refl, #{ check => validate_tuple(Args)
-                , name => ["{", string:join([name(I) || I <- Args], ", "), "}"]
+                , name => str(["{", string:join([name(I) || I <- Args], ", "), "}"])
                 , definition => [defn(I) || I <- Args]
                 , args => Args
                 }}.
@@ -342,7 +342,7 @@ tuple(Args) ->
 -spec list(type()) -> type().
 list(A) ->
   {?type_refl, #{ check => validate_list(A, nil(), true)
-                , name => ["[", name(A), "]"]
+                , name => str(["[", name(A), "]"])
                 , args => [A]
                 , definition => defn(A)
                 }}.
@@ -351,7 +351,7 @@ list(A) ->
 -spec nonempty_list(type()) -> type().
 nonempty_list(A) ->
   {?type_refl, #{ check => validate_list(A, nil(), false)
-                , name => ["[", name(A), ",...]"]
+                , name => str(["[", name(A), ",...]"])
                 , args => [A]
                 , definition => defn(A)
                 }}.
@@ -471,7 +471,7 @@ map(FieldSpecs) ->
   {?type_refl, #{ check => fun(Term) ->
                                validate_map(Fuzzy, Strict, Term)
                            end
-                , name => ["#{", lists:join(", ", StrictFieldNames ++ FuzzyFieldNames), "}"]
+                , name => str(["#{", lists:join(", ", StrictFieldNames ++ FuzzyFieldNames), "}"])
                 , fuzzy_map_fields => Fuzzy
                 , strict_map_fields => Strict
                 }}.
@@ -547,7 +547,7 @@ ip_address() ->
 %%====================================================================
 
 %% @private Get type name
--spec name(type() | ?type_var(atom())) -> iolist().
+-spec name(type() | ?type_var(atom())) -> string().
 name(A) when is_atom(A) ->
   atom_to_list(A);
 name(?type_var(A)) ->
@@ -779,4 +779,7 @@ convert_and_check(Type, String) ->
 
 %% @private Format a name string.
 name(Fmt, Args) ->
-    lists:flatten(io_lib:format(Fmt, Args)).
+    str(io_lib:format(Fmt, Args)).
+
+str(Name) ->
+    lists:flatten(Name).
