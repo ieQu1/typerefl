@@ -15,15 +15,34 @@ from_string_test() ->
   ?assertMatch({ok, "foo"}, typerefl:from_string(string(), "foo")),
   ?assertMatch({ok, <<"foo">>}, typerefl:from_string(binary(), "foo")),
   ?assertMatch({ok, <<0, 12, 3>>}, typerefl:from_string(binary(), [0, 12, 3])),
+
   ?assertMatch({ok, true},  typerefl:from_string(boolean(), "true")),
   ?assertMatch({ok, false}, typerefl:from_string(boolean(), "false")),
-  ?assertMatch({ok, "1"}, typerefl:from_string(string(), "1")),
-  ?assertMatch({ok, '1'}, typerefl:from_string(atom(), "1")),
-  ?assertMatch({ok, 1}, typerefl:from_string(integer(), "1")),
-  ?assertMatch({ok, 1.1}, typerefl:from_string(float(), "1.1")),
-  ?assertMatch({ok, {foo, "bar", []}}, typerefl:from_string(term(), "{foo, \"bar\", []}")),
+  ?assertMatch({ok, true},  typerefl:from_string(boolean(), " true ")),
+  ?assertMatch({ok, false}, typerefl:from_string(boolean(), " false ")),
   ?assertMatch({error, _}, typerefl:from_string(boolean(), "}")),
   ?assertMatch({error, _}, typerefl:from_string(boolean(), ",")),
+
+  ?assertMatch({ok, "1"}, typerefl:from_string(string(), "1")),
+  ?assertMatch({ok, '1'}, typerefl:from_string(atom(), "1")),
+
+  ?assertMatch({ok, 1}, typerefl:from_string(integer(), "1")),
+  ?assertMatch({ok, 1}, typerefl:from_string(integer(), " 1 ")),
+  ?assertMatch({error, _}, typerefl:from_string(integer(), " abc ")),
+
+  ?assertMatch({ok, 1.1}, typerefl:from_string(float(), "1.1")),
+  ?assertMatch({ok, 1.1}, typerefl:from_string(float(), " 1.1 ")),
+  ?assertMatch({error, _}, typerefl:from_string(float(), " 1 ")),
+
+  ?assertMatch({ok, 1.1}, typerefl:from_string(number(), "1.1")),
+  ?assertMatch({ok, 1.1}, typerefl:from_string(number(), " 1.1 ")),
+  ?assertMatch({ok, 1}, typerefl:from_string(number(), " 1 ")),
+
+  ?assertMatch({error, _}, typerefl:from_string(pid(), "<0.123.0>")),
+  ?assertMatch({error, _}, typerefl:from_string(port(), "#Port<0.5>")),
+  ?assertMatch({error, _}, typerefl:from_string(number(), "#Ref<0.4195819181.3441426434.261872>")),
+
+  ?assertMatch({ok, {foo, "bar", []}}, typerefl:from_string(term(), "{foo, \"bar\", []}")),
   ?assertMatch({ok, foo}, typerefl:from_string(foo, "foo")),
   ?assertMatch({error, _}, typerefl:from_string(foo, "bar")),
   ?assertMatch({ok, ''}, typerefl:from_string('', "")),

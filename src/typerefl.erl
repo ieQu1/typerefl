@@ -242,12 +242,12 @@ binary() ->
 %% @doc Reflection of `boolean()' type
 -spec boolean() -> type().
 boolean() ->
-  ?prim(boolean, is_boolean).
+  ?prim(boolean, is_boolean, #{ from_string => fun to_boolean/1 }).
 
 %% @doc Reflection of `float()' type
 -spec float() -> type().
 float() ->
-  ?prim(float, is_float).
+  ?prim(float, is_float, #{ from_string => fun to_float/1 }).
 
 %% @doc Reflection of `function()' type
 -spec function() -> type().
@@ -257,7 +257,7 @@ function() ->
 %% @doc Reflection of `integer()' type
 -spec integer() -> type().
 integer() ->
-  ?prim(integer, is_integer).
+  ?prim(integer, is_integer, #{ from_string => fun to_integer/1 }).
 
 %% @doc Reflection of `list()' type
 -spec list() -> type().
@@ -272,22 +272,22 @@ map() ->
 %% @doc Reflection of `number()' type
 -spec number() -> type().
 number() ->
-  ?prim(number, is_number).
+  ?prim(number, is_number, #{ from_string => fun to_number/1 }).
 
 %% @doc Reflection of `pid()' type
 -spec pid() -> type().
 pid() ->
-  ?prim(pid, is_pid).
+  ?prim(pid, is_pid, #{ from_string => make_to_unparsable("pid") }).
 
 %% @doc Reflection of `port()' type
 -spec port() -> type().
 port() ->
-  ?prim(port, is_port).
+  ?prim(port, is_port, #{ from_string => make_to_unparsable("port") }).
 
 %% @doc Reflection of `reference()' type
 -spec reference() -> type().
 reference() ->
-  ?prim(reference, is_reference).
+  ?prim(reference, is_reference, #{ from_string => make_to_unparsable("reference") }).
 
 %% @doc Reflection of `term()' type
 -spec term() -> type().
@@ -587,6 +587,47 @@ name(T) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+%% @private Try to parse boolean value from string
+to_boolean(Str) ->
+  case string:trim(Str) of
+    "true" -> {ok, true};
+    "false" -> {ok, false};
+    _ -> {error, "Unable to parse boolean value"}
+  end.
+
+%% @private Try to parse integer value from string
+to_integer(Str) ->
+  case string:to_integer(string:trim(Str)) of
+    {Num, ""} when is_integer(Num) -> {ok, Num};
+    _ -> {error, "Unable to parse integer value"}
+  end.
+
+%% @private Try to parse float value from string
+to_float(Str) ->
+  case string:to_float(string:trim(Str)) of
+    {Num, ""} when is_float(Num) -> {ok, Num};
+    _ -> {error, "Unable to parse float value"}
+  end.
+
+%% @private Try to parse number value from string
+to_number(Str) ->
+  TrimmedStr = string:trim(Str),
+  case string:to_integer(TrimmedStr) of
+    {IntNum, ""} when is_integer(IntNum) -> {ok, IntNum};
+    _ ->
+      case string:to_float(TrimmedStr) of
+        {FloatNum, ""} when is_float(FloatNum) -> {ok, FloatNum};
+        _ -> {error, "Unable to parse number value"}
+      end
+  end.
+
+%% @private Factory making functions returning constant parse errors.
+make_to_unparsable(Name) ->
+  Error = "Unable to parse " ++ Name ++ " value",
+  fun(_Str) ->
+    {error, Error}
+  end.
 
 %% @private Get type definition (relevant for alias types)
 -spec defn(type()) -> iolist().
