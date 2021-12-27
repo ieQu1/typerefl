@@ -14,6 +14,7 @@ from_string_test() ->
   ?assertMatch({ok, "foo bar"}, typerefl:from_string(MyString, "foo bar")),
   ?assertMatch({ok, "foo"}, typerefl:from_string(string(), "foo")),
   ?assertMatch({ok, <<"foo">>}, typerefl:from_string(binary(), "foo")),
+  ?assertMatch({ok, <<"foo/你好"/utf8>>}, typerefl:from_string(binary(), "foo/你好")),
   ?assertMatch({ok, <<0, 12, 3>>}, typerefl:from_string(binary(), [0, 12, 3])),
 
   ?assertMatch({ok, true},  typerefl:from_string(boolean(), "true")),

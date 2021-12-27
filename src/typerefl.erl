@@ -236,7 +236,7 @@ atom() ->
 -spec binary() -> type().
 binary() ->
   ?prim(binary, is_binary,
-        #{ from_string => fun(Str) -> {ok, erlang:list_to_binary(Str)} end
+        #{ from_string => fun(Str) -> {ok, unicode:characters_to_binary(Str)} end
          }).
 
 %% @doc Reflection of `boolean()' type
