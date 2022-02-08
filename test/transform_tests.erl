@@ -19,6 +19,11 @@
               , ipv6_address/0, uri/0
               ]).
 
+%% silence the unused warning
+-export_type([ignored/0]).
+
+-export([verify_uri/1]).
+
 %% -----------------------------------------------------------------------------
 
 -type mybool() :: boolean().
@@ -226,7 +231,7 @@ typeEqual(ExpectedName0, A0, B0) ->
   Check = maps:get(check, B),
   ?assertEqual(ExpectedCheck, Check).
 
-mapTypeEqual(ExpectedName0, {?type_refl, A}, {?type_refl, B}) ->
+mapTypeEqual(_ExpectedName0, {?type_refl, A}, {?type_refl, B}) ->
   %% Check field specs:
   #{ fuzzy_map_fields := FA
    , strict_map_fields := SA

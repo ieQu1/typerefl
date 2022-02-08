@@ -57,7 +57,7 @@ abstract({call, Line, {atom, _, '$const'}, [Const]}) ->
                          ]);
 abstract({call, _Line, {atom, _, '$'}, [Splice]}) ->
   normal(Splice);
-abstract(Orig = {var, Line, VarName}) ->
+abstract(Orig = {var, _Line, VarName}) ->
   case lists:suffix("__AST", atom_to_list(VarName)) of
     true ->
       Orig;
