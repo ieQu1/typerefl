@@ -45,10 +45,13 @@ term_refl_test() ->
 
 -type my_int() :: non_neg_integer().
 
+-type my_pos_int() :: pos_integer().
+
 -type my_byte() :: 0..255.
 
 integer_refl_test() ->
   ?typeEqual(non_neg_integer(), my_int()),
+  ?typeEqual(pos_integer(), my_pos_int()),
   ?typeEqual(range(0, 255), my_byte()).
 
 %% -----------------------------------------------------------------------------
