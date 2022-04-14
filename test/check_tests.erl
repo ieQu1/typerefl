@@ -58,7 +58,10 @@ integer_test() ->
   ?invalid(range(-1, 1), 2),
   ?valid(non_neg_integer(), 0),
   ?valid(non_neg_integer(), 1),
-  ?invalid(non_neg_integer(), -1).
+  ?invalid(non_neg_integer(), -1),
+  ?valid(pos_integer(), 1),
+  ?invalid(pos_integer(), 0),
+  ?invalid(pos_integer(), -1).
 
 union_test() ->
   T = union(boolean(), {integer()}),
