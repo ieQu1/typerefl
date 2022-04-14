@@ -12,7 +12,7 @@
 
 -define(mapTypeEqual(A, B), mapTypeEqual(?add_module(??B), A, B)).
 
--reflect_type([ mybool/0, myterm1/0, myterm2/0, my_int/0, my_byte/0
+-reflect_type([ mybool/0, myterm1/0, myterm2/0, my_int/0, my_pos_int/0, my_byte/0
               , list_of_bools/0, non_empty_list_of_bools/0, mylist0/0, strings/0
               , foo_atom/0, foobarbaz/0, mytuple/0, mytuple_any/0, mytuple_empty/0
               , simple/1, stupid_list/1, mymap/0, remote_types/0, ipv4_address/0
