@@ -145,8 +145,9 @@ print(Type) ->
     _ ->
       Defn = [lists:flatten(io_lib:format("~s :: ~s", [K, V]))
               || {K, V} <- Defn1],
-      io_lib:format( "~s when~n  ~s."
-                   , [name(Type), string:join(Defn, ",\n  ")])
+      lists:flatten(
+                   io_lib:format( "~s when~n  ~s."
+                                , [name(Type), string:join(Defn, ",\n  ")]))
   end.
 
 
