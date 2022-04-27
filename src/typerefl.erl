@@ -127,7 +127,7 @@ typecheck(Type, Term) ->
       ok;
     {false, Stack} ->
       Result = #{ reason => typerefl_typecheck
-                , expected => print(Type)
+                , expected => lists:flatten(print(Type))
                 , got => Term
                 , typerefl_path => lists:reverse(Stack)
                 },
