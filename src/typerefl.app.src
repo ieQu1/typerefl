@@ -1,6 +1,6 @@
 {application,typerefl,
              [{description,"Runtime type-checker for Erlang"},
-              {vsn,"0.1.1"},
+              {vsn,"git"},
               {registered,[]},
               {applications,[kernel,stdlib]},
               {env,[]},
