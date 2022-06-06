@@ -23,7 +23,7 @@
         ]).
 
 %% Internal
--export([make_lazy/3, alias/2, alias/4]).
+-export([make_lazy/3, alias/2, alias/4, tget/2, tget_default/1]).
 
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
@@ -50,12 +50,16 @@
 
 -define(is_thunk(A), is_function(A, 0)).
 
--define(prim(Name, Check, Rest),
-        {?type_refl, #{ check => fun erlang:Check/1
-                      , name => str(??Name "()")
-                      } Rest}).
+-define(prim(NAME, CHECK, FROMSTRING),
+        {?type_refl,
+         #thunk{ function = fun([], check) -> fun CHECK/1;
+                               ([], name)  -> ??NAME "()";
+                               ([], from_string) -> FROMSTRING;
+                               ([], Key) -> tget_default(Key)
+                            end
+               }}).
 
--define(prim(Name, Check), ?prim(Name, Check, #{})).
+-define(prim(Name, Check), ?prim(Name, Check, tget_default(from_string))).
 
 -type prim_type() :: {?type_refl, #{ check := ccont()
                                    , name := typename()
@@ -89,8 +93,8 @@ alias(Name, Type) ->
 %% @private Erase definition of the type (it can be useful for
 %% avoiding printing obvious stuff like definition of `char()')
 -spec nodef(type()) -> type().
-nodef({?type_refl, Map}) ->
-  {?type_refl, Map #{definition => []}}.
+nodef(A) ->
+  A. %% TODO
 
 %% @private Create an alias for a higher-kind type
 %%
@@ -101,17 +105,25 @@ nodef({?type_refl, Map}) ->
 %%
 %% @param Name0 Name of the new type
 %% @param Args Values of type variables
--spec alias(string(), type(), map(), [type()]) -> type().
-alias(Name0, Type, AdditionalAttrs, Args) ->
-  {?type_refl, Map0} = desugar(Type),
-  Map = maps:merge(Map0, AdditionalAttrs),
-  Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
-  OldName = tget(name, Map),
-  OldDefn = tget(definition, Map),
-  {?type_refl, Map#{ name => str(Name)
-                   , definition =>
-                       [{Name, OldName} | OldDefn]
-                   }}.
+%% -spec alias(string(), type(), map(), [type()]) -> type().
+alias(Alias, Type, AdditionalAttrs, ArgsExternal) ->
+  Fun = fun(Args, Key) ->
+            Name = [Alias, "(", string:join([name(I) || I <- Args], ", "), ")"],
+            case Key of
+              name ->
+                Name;
+              definition ->
+                {?type_refl, Base} = desugar(Type),
+                [{Name, tget(name, Base)} | tget(definition, Base)];
+              _ ->
+                {?type_refl, Base} = desugar(Type),
+                maps:get(Key, AdditionalAttrs, tget(Key, Base))
+            end
+        end,
+  {?type_refl,
+   #thunk{ args = ArgsExternal
+         , function = Fun
+         }}.
 
 %% @doc Check type of a term.
 %%
@@ -228,24 +240,25 @@ any() ->
 %% @doc Reflection of `atom()' type
 -spec atom() -> type().
 atom() ->
-  ?prim(atom, is_atom, #{from_string => fun atom_from_string/1}).
+  ?prim(atom, is_atom, fun atom_from_string/1).
 
 %% @doc Reflection of `binary()' type
 -spec binary() -> type().
 binary() ->
   ?prim(binary, is_binary,
-        #{ from_string => fun(Str) -> {ok, unicode:characters_to_binary(Str)} end
-         }).
+        fun(Str) ->
+            {ok, unicode:characters_to_binary(Str)}
+        end).
 
 %% @doc Reflection of `boolean()' type
 -spec boolean() -> type().
 boolean() ->
-  ?prim(boolean, is_boolean, #{ from_string => fun to_boolean/1 }).
+  ?prim(boolean, is_boolean, fun to_boolean/1).
 
 %% @doc Reflection of `float()' type
 -spec float() -> type().
 float() ->
-  ?prim(float, is_float, #{ from_string => fun to_float/1 }).
+  ?prim(float, is_float, fun to_float/1).
 
 %% @doc Reflection of `function()' type
 -spec function() -> type().
@@ -255,7 +268,7 @@ function() ->
 %% @doc Reflection of `integer()' type
 -spec integer() -> type().
 integer() ->
-  ?prim(integer, is_integer, #{ from_string => fun to_integer/1 }).
+  ?prim(integer, is_integer, fun to_integer/1).
 
 %% @doc Reflection of `list()' type
 -spec list() -> type().
@@ -270,22 +283,22 @@ map() ->
 %% @doc Reflection of `number()' type
 -spec number() -> type().
 number() ->
-  ?prim(number, is_number, #{ from_string => fun to_number/1 }).
+  ?prim(number, is_number, fun to_number/1).
 
 %% @doc Reflection of `pid()' type
 -spec pid() -> type().
 pid() ->
-  ?prim(pid, is_pid, #{ from_string => make_to_unparsable("pid") }).
+  ?prim(pid, is_pid, make_to_unparsable("pid")).
 
 %% @doc Reflection of `port()' type
 -spec port() -> type().
 port() ->
-  ?prim(port, is_port, #{ from_string => make_to_unparsable("port") }).
+  ?prim(port, is_port, make_to_unparsable("port")).
 
 %% @doc Reflection of `reference()' type
 -spec reference() -> type().
 reference() ->
-  ?prim(reference, is_reference, #{ from_string => make_to_unparsable("reference") }).
+  ?prim(reference, is_reference, make_to_unparsable("reference")).
 
 %% @doc Reflection of `term()' type
 -spec term() -> type().
@@ -450,14 +463,14 @@ node() ->
 %% @doc Reflection of `string()' type
 -spec string() -> type().
 string() ->
-  {?type_refl, R0} = alias("string", nodef(list(char()))),
-  {?type_refl, R0 #{from_string => fun wrap_ok/1}}.
+  alias("string", nodef(list(char())),
+        #{from_string => fun wrap_ok/1}, []).
 
 %% @doc Reflection of `nonempty_string()' type
 -spec nonempty_string() -> type().
 nonempty_string() ->
-  {?type_refl, R0} = alias("nonempty_string", nodef(nonempty_list(char()))),
-  {?type_refl, R0 #{from_string => fun wrap_ok/1}}.
+  alias("nonempty_string", nodef(nonempty_list(char())),
+        #{from_string => fun wrap_ok/1}, []).
 
 %% @doc Reflection of `nil()' type
 -spec nil() -> type().
@@ -885,7 +898,11 @@ str(Name) ->
 
 -compile({inline, [tget/2, tget_default/1]}).
 
-tget(check, TypeBody) ->
+tget(args, #thunk{args = Args}) ->
+  Args;
+tget(Key, #thunk{args = Args, function = Fun}) ->
+  Fun(Args, Key);
+tget(check, TypeBody)->
   maps:get(check, TypeBody);
 tget(name, TypeBody) ->
   maps:get(name, TypeBody);

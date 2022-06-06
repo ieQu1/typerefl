@@ -1,6 +1,11 @@
 -ifndef(TYPEREFL_HRL).
 -define(TYPEREFL_HRL, true).
 
+-record(thunk,
+        { function :: fun((list(), atom()) -> _)
+        , args = [] :: list()
+        }).
+
 -record(lazy_type,
         { name  :: typerefl:typename()
         , thunk :: function()
