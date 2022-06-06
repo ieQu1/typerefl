@@ -800,8 +800,8 @@ or_else(A, B) ->
 -spec desugar(tuple() | [type(), ...] | [] | #{type() => type()}) -> type().
 desugar(T = {?type_refl, _}) ->
   T;
-desugar(#lazy_type{thunk = Type}) ->
-  desugar(Type());
+desugar(#lazy_type{thunk = Type, args = Args}) ->
+  desugar(apply(Type, Args));
 desugar(T) when is_tuple(T) ->
   tuple(tuple_to_list(T));
 desugar([T]) ->
@@ -818,8 +818,9 @@ desugar(T) when is_map(T) ->
 %% @private Make a thunk
 -spec make_lazy(iolist(), fun(), [term()]) -> type().
 make_lazy(Name, Fun, Args) ->
-  #lazy_type{ name = Name
-            , thunk = fun() -> apply(Fun, Args) end
+  #lazy_type{ name  = Name
+            , thunk = Fun
+            , args  = Args
             }.
 
 %% @private Parse string as an Erlang term
