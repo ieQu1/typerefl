@@ -18,7 +18,7 @@
         , printable_unicode_list/0, mfa/0, timeout/0, identifier/0
           %% Complex and nonstandard types
         , regexp_string/1, regexp_binary/1
-        , ip4_address/0, ip6_address/0, ip_address/0
+        , ip4_address/0, ip6_address/0, ip_address/0, listen_port_ip4/0
         , integer/1, atom/1, unicode_charlist/0, unicode_chardata/0
         ]).
 
@@ -183,7 +183,11 @@ from_string({?type_refl, Type}, Str) ->
                 , Type
                 , fun string_to_term/1
                 ),
-  Fun(Str);
+  try Fun(Str) of
+    Val -> Val
+  catch
+    _:_ -> {error, "Unable to parse"}
+  end;
 from_string(Atom, Str) when is_atom(Atom) -> %% Why would anyone want to parse a known atom? Weird, but ok
   case atom_to_list(Atom) of
     Str ->
@@ -555,17 +559,41 @@ ip4_address() ->
   AdditionalAttrs = #{ from_string  => fun inet:parse_ipv4_address/1
                      , pretty_print => fun inet:ntoa/1
                      },
-  alias("ip4_address()", BaseType, AdditionalAttrs, []).
+  alias("ip4_address", BaseType, AdditionalAttrs, []).
 
 %% @doc Type of IPv6 addresses
 -spec ip6_address() -> type().
 ip6_address() ->
-  Range = range(0, 65535),
+  Range = range(0, 1 bsl 16 - 1),
   BaseType = tuple([Range, Range, Range, Range, Range, Range, Range, Range]),
   AdditionalAttrs = #{ from_string  => fun inet:parse_ipv6_address/1
                      , pretty_print => fun inet:ntoa/1
                      },
-  alias("ip6_address()", BaseType, AdditionalAttrs, []).
+  alias("ip6_address", BaseType, AdditionalAttrs, []).
+
+%% @doc Listen IPv4 port, e.g. `127.0.0.1:8080' or `8080'
+-spec listen_port_ip4() -> type().
+listen_port_ip4() ->
+  PortRange = range(1, 1 bsl 16 - 1),
+  BaseType = tuple([ip4_address(), PortRange]),
+  Parse = fun(Str) ->
+              case string:split(Str, ":") of
+                [Addr0, Port0] ->
+                  {Port, _} = string:to_integer(Port0),
+                  {ok, Addr} = inet:parse_ipv4_address(Addr0),
+                  {ok, {Addr, Port}};
+                [Port0] ->
+                  {Port, _} = string:to_integer(Port0),
+                  {ok, {{0, 0, 0, 0}, Port}}
+              end
+          end,
+  PrettyPrint = fun({Addr, Port}) ->
+                    [inet:ntoa(Addr), $:, integer_to_binary(Port)]
+                end,
+  AdditionalAttrs = #{ from_string  => Parse
+                     , pretty_print => PrettyPrint
+                     },
+  alias("listen_port_ip4", BaseType, AdditionalAttrs, []).
 
 %% @doc Type of IPv4 or IPv6 addresses
 -spec ip_address() -> type().
@@ -574,7 +602,7 @@ ip_address() ->
   AdditionalAttrs = #{ from_string  => fun inet:parse_address/1
                      , pretty_print => fun inet:ntoa/1
                      },
-  alias("ip_address()", BaseType, AdditionalAttrs, []).
+  alias("ip_address", BaseType, AdditionalAttrs, []).
 
 %% @doc Get type name.
 -spec name(type() | ?type_var(atom())) -> string().
