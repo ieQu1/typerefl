@@ -106,8 +106,8 @@ alias(Name0, Type, AdditionalAttrs, Args) ->
   {?type_refl, Map0} = desugar(Type),
   Map = maps:merge(Map0, AdditionalAttrs),
   Name = [Name0, "(", string:join([name(I) || I <- Args], ", "), ")"],
-  OldName = maps:get(name, Map),
-  OldDefn = maps:get(definition, Map, []),
+  OldName = tget(name, Map),
+  OldDefn = tget(definition, Map),
   {?type_refl, Map#{ name => str(Name)
                    , definition =>
                        [{Name, OldName} | OldDefn]
@@ -166,23 +166,21 @@ from_string(Type, []) ->
   %% an empty string are `[]' and atom ''. It's typechecker's job to
   %% prove this assumption wrong.
   case Type of
-    {?type_refl, #{from_string := Fun}} ->
+    {?type_refl, Body} ->
+      Fun = tget(from_string, Body),
       Fun([]);
     '' -> {ok, ''};
     _  -> {ok, []}
   end;
-from_string(Type, Strings = [Hd|_]) when is_list(Hd) ->
-  {?type_refl, #{args := [T]}} = Type,
+from_string({?type_refl, Type}, Strings = [Hd|_]) when is_list(Hd) ->
+  [T] = tget(args, Type),
   try [from_string_(T, I) || I <- Strings] of
     L -> {ok, L}
   catch
     _:_ -> {error, "Unable to parse strings"}
   end;
 from_string({?type_refl, Type}, Str) ->
-  Fun = maps:get( from_string
-                , Type
-                , fun string_to_term/1
-                ),
+  Fun = tget(from_string, Type),
   try Fun(Str) of
     Val -> Val
   catch
@@ -214,13 +212,9 @@ from_string_(Type, String) ->
 
 %% @doc Pretty-print value of type
 -spec pretty_print_value(type(), term()) -> iolist().
-pretty_print_value({?type_refl, Args}, Term) ->
-  case Args of
-    #{pretty_print := Fun} ->
-      Fun(Term);
-    _ ->
-      io_lib:format("~p", [Term])
-  end.
+pretty_print_value({?type_refl, Body}, Term) ->
+  Fun = tget(pretty_print, Body),
+  Fun(Term).
 
 %%====================================================================
 %% Type reflections
@@ -610,8 +604,8 @@ name(A) when is_atom(A) ->
   atom_to_list(A);
 name(?type_var(A)) ->
   atom_to_list(A);
-name({?type_refl, #{name := Name}}) ->
-  Name;
+name({?type_refl, Body}) ->
+  tget(name, Body);
 name(#lazy_type{name = Name}) ->
   Name;
 name(T) ->
@@ -668,8 +662,8 @@ defn(#lazy_type{name = Name}) ->
   Name;
 defn(?type_var(_)) ->
   [];
-defn({?type_refl, Map}) ->
-  maps:get(definition, Map, []);
+defn({?type_refl, Body}) ->
+  tget(definition, Body);
 defn(A) when is_atom(A) ->
   [];
 defn(Type) ->
@@ -677,7 +671,8 @@ defn(Type) ->
 
 %% @private Run the continuation and extend the result if needed
 -spec check(type(), term()) -> result().
-check(Type = {?type_refl, #{check := Check}}, Term) ->
+check(Type = {?type_refl, Body}, Term) ->
+  Check = tget(check, Body),
   case Check(Term) of
     true           -> true;
     {false, Stack} -> {false, [name(Type) | Stack]};
@@ -887,3 +882,21 @@ name(Fmt, Args) ->
 
 str(Name) ->
     lists:flatten(Name).
+
+-compile({inline, [tget/2, tget_default/1]}).
+
+tget(check, TypeBody) ->
+  maps:get(check, TypeBody);
+tget(name, TypeBody) ->
+  maps:get(name, TypeBody);
+tget(Key, TypeBody) ->
+  maps:get(Key, TypeBody, tget_default(Key)).
+
+tget_default(args) ->
+  [];
+tget_default(definition) ->
+  [];
+tget_default(pretty_print) ->
+  fun(Term) -> io_lib:format("~p", [Term]) end;
+tget_default(from_string) ->
+  fun string_to_term/1.
