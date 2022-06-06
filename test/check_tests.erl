@@ -279,3 +279,17 @@ ip_address_test() ->
   ?invalid(Type, {0, 0, 0}),
   ?invalid(Type, {65535, 65535, 65535, 65535, 65535, 65535, 65535, 65536}),
   ?invalid(Type, foo).
+
+listen_port_test() ->
+  Type = typerefl:listen_port_ip4(),
+  ?assertMatch( <<"0.0.0.0:8080">>
+              , iolist_to_binary(typerefl:pretty_print_value(Type, {{0, 0, 0, 0}, 8080}))
+              ),
+  ?assertMatch({ok, {{0, 0, 0, 0}, 8080}}, typerefl:from_string(Type, "8080")),
+  ?assertMatch({ok, {{127, 0, 0, 1}, 8080}}, typerefl:from_string(Type, "127.0.0.1:8080")),
+  ?valid(Type, {{0, 0, 0, 0}, 80}),
+  ?valid(Type, {{127, 0, 0, 1}, 1 bsl 16 - 1}),
+  ?invalid(Type, {{127, 0, 0, 1}, 1 bsl 16}),
+  ?invalid(Type, {{127, 0, 1}, 80}),
+  ?invalid(Type, {{127, 0, 0, 1}, 0}),
+  ?invalid(Type, {{256, 0, 0, 1}, 80}).
