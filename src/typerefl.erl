@@ -761,7 +761,7 @@ validate_map(Fuzzy, Strict, Term) ->
               true ->
                 case check(ValT, Val) of
                   true -> throw(success);
-                  _ -> nok
+                  _    -> throw({false, [KeyT]})
                 end;
               _ ->
                 nok

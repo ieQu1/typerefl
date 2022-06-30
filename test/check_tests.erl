@@ -192,6 +192,13 @@ map_test() ->
                , bar => "bar"
                }).
 
+map_overlapping_fuzzy_test() ->
+  T1 = typerefl:map([{fuzzy, foo, atom()}, {fuzzy, term(), term()}]),
+  ?invalid(T1, #{foo => 1}),
+  %% Note: this is actual dialyzer behavior!
+  T2 = typerefl:map([{fuzzy, term(), term()}, {fuzzy, foo, atom()}]),
+  ?valid(T2, #{foo => 1}).
+
 exact_map_test() ->
   T = map([ {strict, foo, boolean()}
           , {strict, bar, string()}
