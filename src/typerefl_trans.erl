@@ -3,7 +3,7 @@
 
 -include("typerefl_int.hrl").
 
--compile({parse_transform, typerefl_quote}).
+-compile({parse_transform, erlang_qq}).
 
 %%-define(debug, true).
 
@@ -43,7 +43,7 @@
 -define(typerefl_module, typerefl).
 -define(lazy_self_var, __TypeReflSelf).
 
--include("typerefl_ast_macros.hrl").
+-include_lib("erlang_qq/include/erlang_qq.hrl").
 
 parse_transform(Forms0, Options) ->
   %%?log("Dump of the module AST:~n~p~n", [Forms0]),

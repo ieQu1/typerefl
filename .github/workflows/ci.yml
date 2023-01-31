@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        otp: [23.2.5, 21.3.8.21]
+        otp: [25.1, 21.3.8.21]
     container:
       image: erlang:${{ matrix.otp }}
 
