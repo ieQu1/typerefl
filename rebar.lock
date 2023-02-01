@@ -1,1 +1,4 @@
-[].
+[{<<"erlang_qq">>,
+  {git,"https://github.com/k32/erlang_qq.git",
+       {ref,"beab75239f799240397aee0aec30685b9bbf33bb"}},
+  0}].
