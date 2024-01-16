@@ -28,7 +28,7 @@
 %% Special types that should not be imported:
 -export([node/0, union/2, union/1, tuple/1, range/2]).
 
--export_type([type/0, check_result/0, result/0, typename/0, err/0]).
+-export_type([type/0, check_result/0, result/0, typename/0, err/0, thunk/1]).
 
 -type err() :: map().
 
@@ -838,7 +838,7 @@ string_to_term(String) ->
       {error, "Unable to tokenize Erlang term"}
   end.
 
--spec re_match(string() | binary(), re:mp()) -> boolean().
+-spec re_match(string() | binary(), _RE) -> boolean().
 re_match(Str, RE)  ->
   try re:run(Str, RE, [{capture, none}]) of
     match   -> true;
