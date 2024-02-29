@@ -159,17 +159,17 @@ verify_uri(Str) ->
   is_map(uri_string:parse(Str)).
 
 verify_test() ->
-  {?type_refl, #{check := Check}} = uri(),
-  ?assertEqual(fun ?MODULE:verify_uri/1, Check).
+  {?type_refl, Body} = uri(),
+  ?assertEqual(fun ?MODULE:verify_uri/1, typerefl:tget(check, Body)).
 
 %% -----------------------------------------------------------------------------
 
 -type ipv4_address() :: {byte(), byte(), byte(), byte()}.
 
 ipv4_address_test() ->
-  {?type_refl, #{from_string := FromString, pretty_print := PrettyPrint}} = ipv4_address(),
-  ?assertEqual(fun inet:parse_ipv4_address/1, FromString),
-  ?assertEqual(fun inet:ntoa/1, PrettyPrint),
+  {?type_refl, Body} = ipv4_address(),
+  ?assertEqual(fun inet:parse_ipv4_address/1, typerefl:tget(from_string, Body)),
+  ?assertEqual(fun inet:ntoa/1, typerefl:tget(pretty_print, Body)),
 
   ?assertMatch({ok, {127, 0, 0, 1}}, typerefl:from_string(ipv4_address(), "127.0.0.1")).
 
@@ -179,7 +179,9 @@ ipv4_address_test() ->
                          0..65535, 0..65535, 0..65535, 0..65535}.
 
 ip_address_test() ->
-  {?type_refl, #{from_string := FromString, pretty_print := PrettyPrint}} = ipv6_address(),
+  {?type_refl, Body} = ipv6_address(),
+  FromString = typerefl:tget(from_string, Body),
+  PrettyPrint = typerefl:tget(pretty_print, Body),
   ?assertEqual(fun inet:parse_ipv6_address/1, FromString),
   ?assertEqual(fun inet:ntoa/1, PrettyPrint),
 
@@ -209,29 +211,29 @@ exports_test() ->
 surrogate_test() ->
   %% Verify that the reflected type's check function is the same as in
   %% the surrogate type:
-  {?type_refl, #{check := Check1}} = typerefl:unicode_charlist(),
-  {?type_refl, #{check := Check1}} = surrogate1(),
+  {?type_refl, Body1} = typerefl:unicode_charlist(),
+  {?type_refl, Body2} = surrogate1(),
+  ?assertEqual(typerefl:tget(check, Body1), typerefl:tget(check, Body2)),
 
-  {?type_refl, #{check := Check2}} = typerefl:unicode_chardata(),
-  {?type_refl, #{check := Check2}} = surrogate2().
+  {?type_refl, Body3} = typerefl:unicode_chardata(),
+  {?type_refl, Body4} = surrogate2(),
+  ?assertEqual(typerefl:tget(check, Body3), typerefl:tget(check, Body4)).
 
 %% -----------------------------------------------------------------------------
 
 typeEqual(ExpectedName0, A0, B0) ->
   %% 0. Check return type:
-  ?assertMatch({?type_refl, #{}}, A0),
-  ?assertMatch({?type_refl, #{}}, B0),
   {?type_refl, A} = A0,
   {?type_refl, B} = B0,
   %% 1. Check name of the type:
   ExpectedName = fix_name(ExpectedName0),
-  Name = fix_name(maps:get(name, B)),
+  Name = fix_name(typerefl:tget(name, B)),
   ?assertEqual(ExpectedName, Name),
   %% 2. Check definition (TODO)
   %%?assertEqual((A)#type.name, (B)#type.definition),
   %% 3. Check `check' callback:
-  ExpectedCheck = maps:get(check, A),
-  Check = maps:get(check, B),
+  ExpectedCheck = typerefl:tget(check, A),
+  Check = typerefl:tget(check, B),
   ?assertEqual(ExpectedCheck, Check).
 
 mapTypeEqual(_ExpectedName0, {?type_refl, A}, {?type_refl, B}) ->
