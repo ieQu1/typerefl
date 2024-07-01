@@ -797,7 +797,7 @@ or_else(A, B) ->
 
 %% @private Transforms tuples to `tuple/1' calls and so on. Forces
 %% lazy evaluation.
--spec desugar(tuple() | [type(), ...] | [] | #{type() => type()}) -> type().
+-spec desugar(type()) -> type_intern().
 desugar(T = {?type_refl, _}) ->
   T;
 desugar(#lazy_type{thunk = Type}) ->
