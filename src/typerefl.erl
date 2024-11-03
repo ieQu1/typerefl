@@ -51,9 +51,10 @@
 -define(is_thunk(A), is_function(A, 0)).
 
 -define(prim(Name, Check, Rest),
-        {?type_refl, #{ check => fun erlang:Check/1
-                      , name => str(??Name "()")
-                      } Rest}).
+        {?type_refl, begin #{ check => fun erlang:Check/1
+                            , name => str(??Name "()")
+                            }
+                     end Rest}).
 
 -define(prim(Name, Check), ?prim(Name, Check, #{})).
 
