@@ -7,17 +7,16 @@ on:
     branches: [ master ]
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        otp: [26.1, 21.3.8.21]
-    container:
-      image: erlang:${{ matrix.otp }}
-
+        otp: ['24', '26']
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+    - uses: erlef/setup-beam@v1
+      with:
+        otp-version: ${{matrix.otp}}
+        rebar3-version: '3.16.1'
     - name: Compile and run tests
       run: make
