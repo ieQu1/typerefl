@@ -21,5 +21,6 @@
 -typerefl_surrogate({{inet, ip_address, 0}, typerefl, ip_address}).
 -typerefl_surrogate({{inet, ip4_address, 0}, typerefl, ip4_address}).
 -typerefl_surrogate({{inet, ip6_address, 0}, typerefl, ip6_address}).
+-typerefl_surrogate({{file, filename_all, 0}, typerefl, filename_all}).
 
 -endif.

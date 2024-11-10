@@ -20,6 +20,7 @@
         , regexp_string/1, regexp_binary/1
         , ip4_address/0, ip6_address/0, ip_address/0, listen_port_ip4/0
         , integer/1, atom/1, unicode_charlist/0, unicode_chardata/0
+        , filename_all/0
         ]).
 
 %% Internal
@@ -527,6 +528,10 @@ iodata() ->
 -spec unicode_chardata() -> type().
 unicode_chardata() ->
   alias("unicode:chardata", union([unicode_charlist(), binary()])).
+
+-spec filename_all() -> type().
+filename_all() ->
+  alias("file:filename_all", union([binary(), string()])).
 
 %% @doc Type of UTF8 strings that match a regexp
 -spec regexp_string(_Regexp :: string() | binary()) -> type().
