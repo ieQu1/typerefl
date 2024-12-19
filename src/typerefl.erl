@@ -185,11 +185,7 @@ from_string({?type_refl, Type}, Str) ->
                 , Type
                 , fun string_to_term/1
                 ),
-  try Fun(Str) of
-    Val -> Val
-  catch
-    _:_ -> {error, "Unable to parse"}
-  end;
+  Fun(Str);
 from_string(Atom, Str) when is_atom(Atom) -> %% Why would anyone want to parse a known atom? Weird, but ok
   case atom_to_list(Atom) of
     Str ->
