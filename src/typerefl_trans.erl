@@ -65,13 +65,14 @@ parse_transform(Forms0, Options) ->
   Forms1 = add_attributes(Forms0, [ {export, Exports}
                                   , {export_type, Exports}
                                   ]),
-  ReifiedTypes = maps:map(fun(_, V) ->
-                              make_reflection_function(Module, State, V)
-                          end,
-                          State#s.reflected_types),
+  ReifiedTypes = maps:fold(fun(_, V, Acc) ->
+                               maybe_add_doc(make_reflection_function(Module, State, V)) ++ Acc
+                           end,
+                           [],
+                           State#s.reflected_types),
   ?log("Reified types:~n~p", [ReifiedTypes]),
   %% Append type reflections to the module definition:
-  Forms2 = Forms1 ++ [I || {_, I} <- maps:to_list(ReifiedTypes)],
+  Forms2 = Forms1 ++ ReifiedTypes,
   Forms = case lists:member(warn_unused_import, Options) of
             true  -> remove_unused_imports(Forms2);
             false -> Forms2
@@ -390,3 +391,11 @@ maybe_add_custom_attr(Name, Line, Key, Map) ->
     _ ->
       []
   end.
+
+-if(?OTP_RELEASE >= 27).
+maybe_add_doc(Body) ->
+  [{attribute, 0, doc, false}, Body].
+-else.
+maybe_add_doc(Body) ->
+  [Body].
+-endif.
